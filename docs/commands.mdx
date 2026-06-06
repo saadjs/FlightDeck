@@ -2058,6 +2058,6 @@ See the command sections above for available &lt;subcommand&gt; options.
 
 See each &lt;subcommand&gt; individual man page for &lt;subcommand-options&gt; and &lt;subcommand-arguments&gt;
 
-Existing AeroSpace configs remain compatible. FlightDeck intentionally continues to use `~/.aerospace.toml`, `${XDG_CONFIG_HOME}/aerospace/aerospace.toml`, and the `AEROSPACE_*` environment variables.
+Existing AeroSpace configs remain compatible. FlightDeck still loads `~/.aerospace.toml`, `${XDG_CONFIG_HOME}/aerospace/aerospace.toml`, and the `AEROSPACE_*` environment variables. It additionally looks for `~/.flightdeck.toml` and `${XDG_CONFIG_HOME}/flightdeck/flightdeck.toml`, which take precedence over the AeroSpace paths when present. The config syntax is unchanged.
 Use `flightdeck` instead of `aerospace` for terminal invocations.
 FlightDeck does not install an `aerospace` CLI alias, and FlightDeck and AeroSpace should not run simultaneously.

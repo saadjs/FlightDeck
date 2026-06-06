@@ -1,21 +1,43 @@
 import Common
 import Foundation
 
-let configDotfileName = ".aerospace.toml"
+let flightdeckConfigDotfileName = ".flightdeck.toml"
+let aerospaceConfigDotfileName = ".aerospace.toml"
+
+// Dotfile used when FlightDeck creates a brand-new config from scratch (menu bar "Open config").
+let configDotfileName = flightdeckConfigDotfileName
+
 func findCustomConfigUrl() -> ConfigFile {
+    if let configLocation = serverArgs.configLocation {
+        return matchConfigCandidates([URL(filePath: configLocation)])
+    }
     let xdgConfigHome = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"].map { URL(filePath: $0) }
         ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".config/")
-    let candidates: [URL] = switch serverArgs.configLocation {
-        case let configLocation?: [URL(filePath: configLocation)]
-        case nil:
-            [
-                FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName),
-                xdgConfigHome.appending(path: "aerospace").appending(path: "aerospace.toml"),
-            ]
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    // FlightDeck config takes precedence over AeroSpace config in every supported location.
+    // The two tiers are checked in order; the first tier that has any config wins.
+    let tiers: [[URL]] = [
+        [
+            home.appending(path: flightdeckConfigDotfileName),
+            xdgConfigHome.appending(path: "flightdeck").appending(path: "flightdeck.toml"),
+        ],
+        [
+            home.appending(path: aerospaceConfigDotfileName),
+            xdgConfigHome.appending(path: "aerospace").appending(path: "aerospace.toml"),
+        ],
+    ]
+    for tier in tiers {
+        switch matchConfigCandidates(tier) {
+            case .noCustomConfigExists: continue
+            case let result: return result
+        }
     }
+    return .noCustomConfigExists
+}
+
+private func matchConfigCandidates(_ candidates: [URL]) -> ConfigFile {
     let existingCandidates: [URL] = candidates.filter { (candidate: URL) in FileManager.default.fileExists(atPath: candidate.path) }
-    let count = existingCandidates.count
-    return switch count {
+    return switch existingCandidates.count {
         case 0: .noCustomConfigExists
         case 1: .file(existingCandidates.first.orDie())
         default: .ambiguousConfigError(existingCandidates)
