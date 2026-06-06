@@ -26,14 +26,6 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
             }
             Divider()
         }
-        Button {
-            NSWorkspace.shared.open(URL(string: "https://github.com/sponsors/nikitabobko").orDie())
-            viewModel.sponsorshipMessage = sponsorshipPrompts.randomElement().orDie()
-        } label: {
-            Text("Sponsor AeroSpace on GitHub")
-            Text(viewModel.sponsorshipMessage)
-        }
-        Divider()
         Button(viewModel.isEnabled ? "Disable" : "Enable") {
             Task {
                 try await runLightSession(.menuBarButton, .forceRun) { () throws in
@@ -73,8 +65,8 @@ func openConfigButton(showShortcutGroup: Bool = false) -> some View {
             case .noCustomConfigExists:
                 _ = try? FileManager.default.copyItem(atPath: defaultConfigUrl.path, toPath: fallbackConfig.path)
                 fallbackConfig.open(with: editor)
-            case .ambiguousConfigError:
-                fallbackConfig.open(with: editor)
+            case .ambiguousConfigError(let candidates):
+                (candidates.first ?? fallbackConfig).open(with: editor)
         }
     }.keyboardShortcut(",", modifiers: .command)
     switch showShortcutGroup {

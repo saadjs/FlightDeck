@@ -13,7 +13,7 @@ The following AeroSpace interfaces are intentionally retained unchanged:
 |   |   |
 | --- | --- |
 | Interface | Details |
-| Config file paths | `~/.aerospace.toml` and `${XDG_CONFIG_HOME}/aerospace/aerospace.toml` |
+| Config file paths | `~/.aerospace.toml` and `${XDG_CONFIG_HOME}/aerospace/aerospace.toml` are still loaded. FlightDeck additionally looks for `~/.flightdeck.toml` and `${XDG_CONFIG_HOME}/flightdeck/flightdeck.toml`, which take precedence when present (see [Custom config location](/guide#custom-config-location)) |
 | Config syntax | All TOML keys, types, and default values are identical to AeroSpace |
 | Environment variables | `AEROSPACE_FOCUSED_WORKSPACE`, `AEROSPACE_PREV_WORKSPACE`, `AEROSPACE_INHERITED_*`, and all other `AEROSPACE_*` variables |
 | IPC socket path | Same as AeroSpace |

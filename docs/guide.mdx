@@ -34,15 +34,19 @@ On first launch, macOS still shows the standard confirmation for an app download
 
 ### Custom config location
 
-FlightDeck tries to find the custom config in two locations:
+FlightDeck tries to find the custom config in four locations, in this order:
 
+1. `~/.flightdeck.toml`
+1. `${XDG_CONFIG_HOME}/flightdeck/flightdeck.toml`
 1. `~/.aerospace.toml`
 1. `${XDG_CONFIG_HOME}/aerospace/aerospace.toml`
 (environment variable `XDG_CONFIG_HOME` fallbacks to `~/.config` if the variable is not presented)
 
-If the config is found in more than one location then the ambiguity is reported.
+A `flightdeck.toml` always takes precedence over an `aerospace.toml`: if any FlightDeck config exists,
+the AeroSpace locations are ignored. If two configs are found *within the same tier* (for example both
+`~/.flightdeck.toml` and `${XDG_CONFIG_HOME}/flightdeck/flightdeck.toml`) then the ambiguity is reported.
 
-These AeroSpace-compatible paths are intentionally retained so existing configurations continue to work unchanged.
+The AeroSpace-compatible paths are intentionally retained so existing configurations continue to work unchanged.
 Commands inside the TOML config also remain unchanged.
 Only terminal invocations use the `flightdeck` executable instead of `aerospace`.
 FlightDeck does not install an `aerospace` CLI alias, and FlightDeck and AeroSpace should not run simultaneously.

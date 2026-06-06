@@ -69,7 +69,8 @@ private let serverHelp = """
     OPTIONS:
       -h, --help              Print help
       -v, --version           Print FlightDeck.app version
-      --config-path <path>    Config path. It will take priority over ~/.aerospace.toml
+      --config-path <path>    Config path. It will take priority over ~/.flightdeck.toml,
+                              ${XDG_CONFIG_HOME}/flightdeck/flightdeck.toml, ~/.aerospace.toml,
                               and ${XDG_CONFIG_HOME}/aerospace/aerospace.toml
       --read-only             Disable window management.
                               Useful if you want to use only debug-windows or other query commands.
