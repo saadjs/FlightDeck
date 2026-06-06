@@ -12,6 +12,8 @@ final class MacApp: AbstractApp {
     private let axApp: ThreadGuardedValue<AXUIElement>
     private let appAxSubscriptions: ThreadGuardedValue<[AxSubscription]> // keep subscriptions in memory
     private let windows: ThreadGuardedValue<[UInt32: AxWindow]> = .init([:])
+    private let previousOnScreenWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
+    private let backgroundTabWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
     private var windowsCount = 0
     var lastNativeFocusedWindowId: UInt32? = nil
     private var thread: Thread?
@@ -226,24 +228,24 @@ final class MacApp: AbstractApp {
     }
 
     @MainActor
-    static func refreshAllAndGetAliveWindowIds(frontmostAppBundleId: String?) async throws -> [MacApp: [UInt32]] {
+    static func refreshAllAndGetAliveWindowIds(frontmostAppBundleId: String?) async throws -> [MacApp: AppRefreshResult] {
         for (_, app) in MacApp.allAppsMap { // gc dead apps
             try checkCancellation()
             if app.nsApp.isTerminated {
                 await app.destroy()
             }
         }
-        // Snapshot the on-screen window ids once, so every app's refresh shares a consistent view when
-        // filtering out background tabs of natively-tabbed apps (see refreshAndGetAliveWindowIds).
+        // Snapshot once so every app sees a consistent native-tab transition.
         let onScreenWindowIds = currentlyOnScreenWindowIds()
-        return try await withThrowingTaskGroup(of: (pid_t, [UInt32]).self, returning: [MacApp: [UInt32]].self) { group in
+        return try await withThrowingTaskGroup(of: (pid_t, AppRefreshResult).self, returning: [MacApp: AppRefreshResult].self) { group in
             func refreshTheApp(_ nsApp: NSRunningApplication) {
                 group.addTask { @Sendable @MainActor in
-                    guard let app = try await MacApp.getOrRegister(nsApp) else { return (nsApp.processIdentifier, []) }
+                    guard let app = try await MacApp.getOrRegister(nsApp) else {
+                        return (nsApp.processIdentifier, AppRefreshResult())
+                    }
                     return (nsApp.processIdentifier, try await app.refreshAndGetAliveWindowIds(
                         frontmostAppBundleId: frontmostAppBundleId,
                         onScreenWindowIds: onScreenWindowIds,
-                        appIsHidden: nsApp.isHidden,
                     ))
                 }
             }
@@ -263,69 +265,68 @@ final class MacApp: AbstractApp {
                     refreshTheApp(app.nsApp)
                 }
             }
-            var result: [MacApp: [UInt32]] = [:]
-            for try await (pid, windowIds) in group {
+            var result: [MacApp: AppRefreshResult] = [:]
+            for try await (pid, refreshResult) in group {
                 if let app = MacApp.allAppsMap[pid] {
-                    result[app] = windowIds
+                    result[app] = refreshResult
                 }
             }
             return result
         }
     }
 
-    private func refreshAndGetAliveWindowIds(frontmostAppBundleId: String?, onScreenWindowIds: Set<UInt32>, appIsHidden: Bool) async throws -> [UInt32] {
+    private func refreshAndGetAliveWindowIds(frontmostAppBundleId: String?, onScreenWindowIds: Set<UInt32>) async throws -> AppRefreshResult {
         if nsApp.isTerminated {
             await destroy()
-            return []
+            return AppRefreshResult()
         }
-        guard let thread else { return [] }
-        let (alive, dead) = try await thread.runInLoop { [nsApp, windows, axApp] (job) -> ([UInt32], [UInt32]) in
+        guard let thread else { return AppRefreshResult() }
+        let result = try await thread.runInLoop {
+            [nsApp, windows, axApp, previousOnScreenWindowIds, backgroundTabWindowIds] (job) -> AppRefreshResult in
             var alive: [UInt32: AxWindow] = windows.threadGuarded
             var dead = [UInt32: AxWindow]()
-
-            // Natively-tabbed apps (Terminal.app, Ghostty with `macos-titlebar-style = tabs`/`native`, …) keep
-            // every background tab in kAXWindowsAttribute with a valid window id, but AppKit *orders the inactive
-            // tab out*, so it drops from the on-screen window list (kCGWindowIsOnscreen tracks ordered-in/out, not
-            // pixel position — a window merely repositioned off-screen, e.g. an inactive workspace hidden in a
-            // corner, stays on-screen). Treat an ordered-out window as not-alive so it doesn't get its own
-            // tile/accordion slot; it re-appears the moment its tab is selected. Guarded so we never drop other
-            // legitimately off-screen windows: the lock screen (handled below), a hidden app (all its windows are
-            // off-screen), minimized or native-fullscreen windows, or a bogus/empty on-screen snapshot.
-            let detectBackgroundTabs = frontmostAppBundleId != lockScreenAppBundleId && !appIsHidden && !onScreenWindowIds.isEmpty
-            func isBackgroundTab(_ id: UInt32, _ ax: AXUIElement) -> Bool {
-                // Short-circuit on the cheap checks before doing the AX reads (minimized/fullscreen).
-                guard detectBackgroundTabs, !onScreenWindowIds.contains(id) else { return false }
-                return shouldExcludeAsBackgroundTab(
-                    detectBackgroundTabs: true,
-                    isOnScreen: false,
-                    isMinimized: ax.get(Ax.minimizedAttr) == true,
-                    isFullscreen: ax.get(Ax.isFullscreenAttr) == true,
-                )
+            let axWindows = axApp.threadGuarded.get(Ax.windowsAttr) ?? []
+            let axWindowIds = axWindows.map(\.windowId).toSet()
+            let currentOnScreen = axWindowIds.intersection(onScreenWindowIds)
+            var backgroundTabs = backgroundTabWindowIds.threadGuarded
+            let replacements = nativeTabReplacements(
+                groups: Dictionary(grouping: axWindows.compactMap { window in
+                    window.ax.nativeTabGroupSignature.map { ($0, window.windowId) }
+                }, by: \.0).mapValues { $0.map(\.1).toSet() },
+                previousOnScreen: previousOnScreenWindowIds.threadGuarded,
+                currentOnScreen: currentOnScreen,
+            )
+            for (oldWindowId, newWindowId) in replacements {
+                backgroundTabs.insert(oldWindowId)
+                backgroundTabs.remove(newWindowId)
             }
+            backgroundTabs.formIntersection(axWindowIds)
+            previousOnScreenWindowIds.threadGuarded = currentOnScreen
+            backgroundTabWindowIds.threadGuarded = backgroundTabs
 
             // Second line of defence against lock screen. See the first line of defence: closedWindowsCache
             // Second and third lines of defence are technically needed only to avoid potential flickering
             if frontmostAppBundleId != lockScreenAppBundleId {
                 (alive, dead) = try alive.partition {
                     try job.checkCancellation()
-                    return $0.value.ax.containingWindowId() != nil && !isBackgroundTab($0.key, $0.value.ax)
+                    return $0.value.ax.containingWindowId() != nil && !backgroundTabs.contains($0.key)
                 }
             }
 
-            for (id, window) in axApp.threadGuarded.get(Ax.windowsAttr) ?? [] {
+            for (id, window) in axWindows {
                 try job.checkCancellation()
-                if isBackgroundTab(id, window) { continue }
+                if backgroundTabs.contains(id) { continue }
                 try alive.getOrRegisterAxWindow(windowId: id, window, nsApp, job)
             }
 
             windows.threadGuarded = alive
-            return (Array(alive.keys), Array(dead.keys))
+            return AppRefreshResult(aliveWindowIds: Array(alive.keys), deadWindowIds: Array(dead.keys), replacements: replacements)
         }
-        windowsCount = alive.count
-        for windowId in dead {
+        windowsCount = result.aliveWindowIds.count
+        for windowId in result.deadWindowIds {
             setFrameJobs.removeValue(forKey: windowId)?.cancel()
         }
-        return alive
+        return result
     }
 
     private func destroy() async {
@@ -400,19 +401,36 @@ extension [UInt32: AxWindow] {
     }
 }
 
-/// Whether an app window should be excluded from the window tree as a background tab of a natively-tabbed app
-/// (Terminal.app, Ghostty with `macos-titlebar-style = tabs`/`native`, …). Such a tab stays in the app's
-/// `kAXWindowsAttribute` with a valid window id, but AppKit orders the inactive tab out (so it's off-screen).
-///
-/// Pure so it can be unit-tested. `isMinimized` / `isFullscreen` windows are also legitimately off-screen but
-/// are tracked via their own containers, so they must be kept.
-func shouldExcludeAsBackgroundTab(
-    detectBackgroundTabs: Bool,
-    isOnScreen: Bool,
-    isMinimized: Bool,
-    isFullscreen: Bool,
-) -> Bool {
-    detectBackgroundTabs && !isOnScreen && !isMinimized && !isFullscreen
+struct AppRefreshResult: Sendable {
+    var aliveWindowIds: [UInt32] = []
+    var deadWindowIds: [UInt32] = []
+    var replacements: [UInt32: UInt32] = [:]
+}
+
+func nativeTabReplacements(
+    groups: [String: Set<UInt32>],
+    previousOnScreen: Set<UInt32>,
+    currentOnScreen: Set<UInt32>,
+) -> [UInt32: UInt32] {
+    var result: [UInt32: UInt32] = [:]
+    for ids in groups.values {
+        let becameOffScreen = ids.intersection(previousOnScreen).subtracting(currentOnScreen)
+        let becameOnScreen = ids.intersection(currentOnScreen).subtracting(previousOnScreen)
+        if let oldWindowId = becameOffScreen.singleOrNil(), let newWindowId = becameOnScreen.singleOrNil() {
+            result[oldWindowId] = newWindowId
+        }
+    }
+    return result
+}
+
+extension AXUIElement {
+    fileprivate var nativeTabGroupSignature: String? {
+        let tabGroups = (get(Ax.childrenAttr) ?? []).filter { $0.get(Ax.roleAttr) == kAXTabGroupRole }
+        guard let tabGroup = tabGroups.singleOrNil() else { return nil }
+        let tabs = (tabGroup.get(Ax.childrenAttr) ?? []).filter { $0.get(Ax.subroleAttr) == "AXTabButton" }
+        guard tabs.count > 1 else { return nil }
+        return tabs.map { $0.get(Ax.titleAttr) ?? "" }.joined(separator: "\u{0}")
+    }
 }
 
 private func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?, _ job: RunLoopJob) throws {

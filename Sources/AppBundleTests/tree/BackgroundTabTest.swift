@@ -2,37 +2,47 @@
 import XCTest
 
 final class BackgroundTabTest: XCTestCase {
-    // An off-screen window that isn't minimized/fullscreen is a background tab of a natively-tabbed app that
-    // AppKit ordered out -> exclude it from the tree (otherwise it gets its own empty tile/accordion slot).
-    func testBackgroundTabIsExcluded() {
-        XCTAssertTrue(shouldExcludeAsBackgroundTab(
-            detectBackgroundTabs: true, isOnScreen: false, isMinimized: false, isFullscreen: false,
-        ))
+    func testDetectsNativeTabSelectionSwap() {
+        XCTAssertEqual(
+            nativeTabReplacements(
+                groups: ["shell": [10, 11]],
+                previousOnScreen: [10],
+                currentOnScreen: [11],
+            ),
+            [10: 11],
+        )
     }
 
-    // The active tab (on-screen) is a normal window -> keep it. NB kCGWindowIsOnscreen tracks ordered-in/out,
-    // not pixel position, so a window merely repositioned off-screen (e.g. an inactive workspace hidden in a
-    // corner) is still on-screen here and therefore kept.
-    func testOnScreenWindowIsKept() {
-        XCTAssertFalse(shouldExcludeAsBackgroundTab(
-            detectBackgroundTabs: true, isOnScreen: true, isMinimized: false, isFullscreen: false,
-        ))
+    func testDoesNotTreatInactiveNativeSpaceAsTabSwitch() {
+        XCTAssertEqual(
+            nativeTabReplacements(
+                groups: ["shell": [10, 11]],
+                previousOnScreen: [10],
+                currentOnScreen: [],
+            ),
+            [:],
+        )
     }
 
-    // Minimized and native-fullscreen windows are legitimately off-screen and tracked via their own containers.
-    func testMinimizedAndFullscreenAreKept() {
-        XCTAssertFalse(shouldExcludeAsBackgroundTab(
-            detectBackgroundTabs: true, isOnScreen: false, isMinimized: true, isFullscreen: false,
-        ))
-        XCTAssertFalse(shouldExcludeAsBackgroundTab(
-            detectBackgroundTabs: true, isOnScreen: false, isMinimized: false, isFullscreen: true,
-        ))
+    func testDoesNotPairWindowsFromDifferentTabGroups() {
+        XCTAssertEqual(
+            nativeTabReplacements(
+                groups: ["first": [10], "second": [11]],
+                previousOnScreen: [10],
+                currentOnScreen: [11],
+            ),
+            [:],
+        )
     }
 
-    // When detection is disabled (lock screen, hidden app, empty on-screen snapshot) nothing is excluded.
-    func testDetectionDisabledKeepsEverything() {
-        XCTAssertFalse(shouldExcludeAsBackgroundTab(
-            detectBackgroundTabs: false, isOnScreen: false, isMinimized: false, isFullscreen: false,
-        ))
+    func testAmbiguousGroupTransitionIsIgnored() {
+        XCTAssertEqual(
+            nativeTabReplacements(
+                groups: ["shell": [10, 11, 12, 13]],
+                previousOnScreen: [10, 11],
+                currentOnScreen: [12, 13],
+            ),
+            [:],
+        )
     }
 }

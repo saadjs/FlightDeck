@@ -15,6 +15,16 @@ final class MacWindow: Window {
     @MainActor static var allWindows: [MacWindow] { Array(allWindowsMap.values) }
 
     @MainActor
+    static func replaceWindowId(from oldWindowId: UInt32, to newWindowId: UInt32) {
+        guard oldWindowId != newWindowId, let window = allWindowsMap.removeValue(forKey: oldWindowId) else { return }
+        if let duplicate = allWindowsMap.removeValue(forKey: newWindowId) {
+            duplicate.unbindFromParent()
+        }
+        window.replaceWindowId(with: newWindowId)
+        allWindowsMap[newWindowId] = window
+    }
+
+    @MainActor
     @discardableResult
     static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
         if let existing = allWindowsMap[windowId] { return existing }

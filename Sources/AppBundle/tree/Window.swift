@@ -2,7 +2,7 @@ import AppKit
 import Common
 
 open class Window: TreeNode, Hashable {
-    let windowId: UInt32
+    private(set) var windowId: UInt32
     let app: any AbstractApp
     var lastFloatingSize: CGSize?
     var isFullscreen: Bool = false
@@ -17,6 +17,10 @@ open class Window: TreeNode, Hashable {
         super.init(parent: parent, adaptiveWeight: adaptiveWeight, index: index)
     }
 
+    func replaceWindowId(with windowId: UInt32) {
+        self.windowId = windowId
+    }
+
     @MainActor static func get(byId windowId: UInt32) -> Window? { // todo make non optional
         isUnitTest
             ? Workspace.all.flatMap { $0.allLeafWindowsRecursive }.first(where: { $0.windowId == windowId })
@@ -27,7 +31,7 @@ open class Window: TreeNode, Hashable {
     func closeAxWindow() { die("Not implemented") }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(windowId)
+        hasher.combine(ObjectIdentifier(self))
     }
 
     func getAxSize() async throws -> CGSize? { die("Not implemented") }
