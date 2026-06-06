@@ -288,39 +288,38 @@ final class MacApp: AbstractApp {
             let axWindows = axApp.threadGuarded.get(Ax.windowsAttr) ?? []
             let axWindowIds = axWindows.map(\.windowId).toSet()
             let currentOnScreen = axWindowIds.intersection(onScreenWindowIds)
-            var backgroundTabs = backgroundTabWindowIds.threadGuarded
-            let replacements = nativeTabReplacements(
-                groups: Dictionary(grouping: axWindows.compactMap { window in
-                    window.ax.nativeTabGroupSignature.map { ($0, window.windowId) }
-                }, by: \.0).mapValues { $0.map(\.1).toSet() },
+            let groups = validatedNativeTabGroups(axWindows.compactMap { window in
+                window.ax.nativeTabGroupMember.map {
+                    NativeTabGroupMember(signature: $0.signature, windowId: window.windowId, selectedIndex: $0.selectedIndex, tabCount: $0.tabCount)
+                }
+            })
+            let tabState = updateNativeTabState(
+                groups: groups,
+                windowIds: axWindowIds,
                 previousOnScreen: previousOnScreenWindowIds.threadGuarded,
                 currentOnScreen: currentOnScreen,
+                previousBackgroundTabs: backgroundTabWindowIds.threadGuarded,
             )
-            for (oldWindowId, newWindowId) in replacements {
-                backgroundTabs.insert(oldWindowId)
-                backgroundTabs.remove(newWindowId)
-            }
-            backgroundTabs.formIntersection(axWindowIds)
             previousOnScreenWindowIds.threadGuarded = currentOnScreen
-            backgroundTabWindowIds.threadGuarded = backgroundTabs
+            backgroundTabWindowIds.threadGuarded = tabState.backgroundTabs
 
             // Second line of defence against lock screen. See the first line of defence: closedWindowsCache
             // Second and third lines of defence are technically needed only to avoid potential flickering
             if frontmostAppBundleId != lockScreenAppBundleId {
                 (alive, dead) = try alive.partition {
                     try job.checkCancellation()
-                    return $0.value.ax.containingWindowId() != nil && !backgroundTabs.contains($0.key)
+                    return $0.value.ax.containingWindowId() != nil && !tabState.backgroundTabs.contains($0.key)
                 }
             }
 
             for (id, window) in axWindows {
                 try job.checkCancellation()
-                if backgroundTabs.contains(id) { continue }
+                if tabState.backgroundTabs.contains(id) { continue }
                 try alive.getOrRegisterAxWindow(windowId: id, window, nsApp, job)
             }
 
             windows.threadGuarded = alive
-            return AppRefreshResult(aliveWindowIds: Array(alive.keys), deadWindowIds: Array(dead.keys), replacements: replacements)
+            return AppRefreshResult(aliveWindowIds: Array(alive.keys), deadWindowIds: Array(dead.keys), replacements: tabState.replacements)
         }
         windowsCount = result.aliveWindowIds.count
         for windowId in result.deadWindowIds {
@@ -407,29 +406,83 @@ struct AppRefreshResult: Sendable {
     var replacements: [UInt32: UInt32] = [:]
 }
 
-func nativeTabReplacements(
+struct NativeTabState: Equatable {
+    var backgroundTabs: Set<UInt32>
+    var replacements: [UInt32: UInt32]
+}
+
+struct NativeTabGroupMember: Equatable {
+    var signature: String
+    var windowId: UInt32
+    var selectedIndex: Int
+    var tabCount: Int
+}
+
+func validatedNativeTabGroups(_ members: [NativeTabGroupMember]) -> [String: Set<UInt32>] {
+    Dictionary(grouping: members, by: \.signature).compactMapValues { group in
+        guard let tabCount = group.first?.tabCount,
+              tabCount > 1,
+              group.count == tabCount,
+              group.allSatisfy({ $0.tabCount == tabCount }),
+              group.map(\.selectedIndex).toSet().count == tabCount
+        else {
+            return nil
+        }
+        return group.map(\.windowId).toSet()
+    }
+}
+
+func updateNativeTabState(
     groups: [String: Set<UInt32>],
+    windowIds: Set<UInt32>,
     previousOnScreen: Set<UInt32>,
     currentOnScreen: Set<UInt32>,
-) -> [UInt32: UInt32] {
-    var result: [UInt32: UInt32] = [:]
+    previousBackgroundTabs: Set<UInt32>,
+) -> NativeTabState {
+    var backgroundTabs = previousBackgroundTabs.intersection(windowIds)
+    var replacements: [UInt32: UInt32] = [:]
+
+    // Seed restored/new tab groups. Requiring exactly one on-screen member avoids mistaking a group on an
+    // inactive native macOS Space (zero on-screen members) or an ambiguous signature (multiple) for background tabs.
     for ids in groups.values {
+        let onScreen = ids.intersection(currentOnScreen)
+        if onScreen.count == 1 {
+            backgroundTabs.formUnion(ids.subtracting(onScreen))
+        }
+
         let becameOffScreen = ids.intersection(previousOnScreen).subtracting(currentOnScreen)
         let becameOnScreen = ids.intersection(currentOnScreen).subtracting(previousOnScreen)
         if let oldWindowId = becameOffScreen.singleOrNil(), let newWindowId = becameOnScreen.singleOrNil() {
-            result[oldWindowId] = newWindowId
+            replacements[oldWindowId] = newWindowId
         }
     }
-    return result
+
+    // Some apps remove the selected tab's old window id before exposing the next selected tab. Pair the single
+    // disappeared selected id with the single previously-background id that became visible.
+    let disappearedSelected = previousOnScreen.subtracting(currentOnScreen).subtracting(windowIds)
+    let promotedBackground = currentOnScreen.subtracting(previousOnScreen).intersection(previousBackgroundTabs)
+    if let oldWindowId = disappearedSelected.singleOrNil(), let newWindowId = promotedBackground.singleOrNil() {
+        replacements[oldWindowId] = newWindowId
+    }
+
+    for (oldWindowId, newWindowId) in replacements {
+        if windowIds.contains(oldWindowId) {
+            backgroundTabs.insert(oldWindowId)
+        }
+        backgroundTabs.remove(newWindowId)
+    }
+    // A visible tab must never remain excluded, even if an app reports an unexpected transition.
+    backgroundTabs.subtract(currentOnScreen)
+    return NativeTabState(backgroundTabs: backgroundTabs, replacements: replacements)
 }
 
 extension AXUIElement {
-    fileprivate var nativeTabGroupSignature: String? {
+    fileprivate var nativeTabGroupMember: (signature: String, selectedIndex: Int, tabCount: Int)? {
         let tabGroups = (get(Ax.childrenAttr) ?? []).filter { $0.get(Ax.roleAttr) == kAXTabGroupRole }
         guard let tabGroup = tabGroups.singleOrNil() else { return nil }
         let tabs = (tabGroup.get(Ax.childrenAttr) ?? []).filter { $0.get(Ax.subroleAttr) == "AXTabButton" }
-        guard tabs.count > 1 else { return nil }
-        return tabs.map { $0.get(Ax.titleAttr) ?? "" }.joined(separator: "\u{0}")
+        guard tabs.count > 1, let selectedIndex = tabs.firstIndex(where: { $0.get(Ax.valueAttr) == true }) else { return nil }
+        return (tabs.map { $0.get(Ax.titleAttr) ?? "" }.joined(separator: "\u{0}"), selectedIndex, tabs.count)
     }
 }
 
