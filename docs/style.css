@@ -1,0 +1,7 @@
+.nav-logo {
+  height: 2rem !important;
+}
+
+#navbar a[href="https://github.com/saadjs/FlightDeck"] {
+  font-size: 0;
+}
