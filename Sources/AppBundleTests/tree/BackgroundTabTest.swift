@@ -58,8 +58,23 @@ final class BackgroundTabTest: XCTestCase {
                 previousOnScreen: [10],
                 currentOnScreen: [11],
                 previousBackgroundTabs: [11, 12],
+                previousGroups: ["shell": [10, 11, 12]],
             ),
             NativeTabState(backgroundTabs: [12], replacements: [10: 11]),
+        )
+    }
+
+    func testDoesNotPairUnrelatedClosedWindowWithPromotedTab() {
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: ["shell": [10, 11, 12]],
+                windowIds: [10, 11, 12],
+                previousOnScreen: [10, 20],
+                currentOnScreen: [11],
+                previousBackgroundTabs: [11, 12],
+                previousGroups: ["shell": [10, 11, 12]],
+            ),
+            NativeTabState(backgroundTabs: [10, 12], replacements: [10: 11]),
         )
     }
 

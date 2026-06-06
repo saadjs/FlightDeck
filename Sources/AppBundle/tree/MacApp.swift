@@ -14,6 +14,7 @@ final class MacApp: AbstractApp {
     private let windows: ThreadGuardedValue<[UInt32: AxWindow]> = .init([:])
     private let previousOnScreenWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
     private let backgroundTabWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
+    private let previousNativeTabGroups: ThreadGuardedValue<[String: Set<UInt32>]> = .init([:])
     private var windowsCount = 0
     var lastNativeFocusedWindowId: UInt32? = nil
     private var thread: Thread?
@@ -282,7 +283,7 @@ final class MacApp: AbstractApp {
         }
         guard let thread else { return AppRefreshResult() }
         let result = try await thread.runInLoop {
-            [nsApp, windows, axApp, previousOnScreenWindowIds, backgroundTabWindowIds] (job) -> AppRefreshResult in
+            [nsApp, windows, axApp, previousOnScreenWindowIds, backgroundTabWindowIds, previousNativeTabGroups] (job) -> AppRefreshResult in
             var alive: [UInt32: AxWindow] = windows.threadGuarded
             var dead = [UInt32: AxWindow]()
             let axWindows = axApp.threadGuarded.get(Ax.windowsAttr) ?? []
@@ -299,9 +300,11 @@ final class MacApp: AbstractApp {
                 previousOnScreen: previousOnScreenWindowIds.threadGuarded,
                 currentOnScreen: currentOnScreen,
                 previousBackgroundTabs: backgroundTabWindowIds.threadGuarded,
+                previousGroups: previousNativeTabGroups.threadGuarded,
             )
             previousOnScreenWindowIds.threadGuarded = currentOnScreen
             backgroundTabWindowIds.threadGuarded = tabState.backgroundTabs
+            previousNativeTabGroups.threadGuarded = groups
 
             // Second line of defence against lock screen. See the first line of defence: closedWindowsCache
             // Second and third lines of defence are technically needed only to avoid potential flickering
@@ -438,6 +441,7 @@ func updateNativeTabState(
     previousOnScreen: Set<UInt32>,
     currentOnScreen: Set<UInt32>,
     previousBackgroundTabs: Set<UInt32>,
+    previousGroups: [String: Set<UInt32>] = [:],
 ) -> NativeTabState {
     var backgroundTabs = previousBackgroundTabs.intersection(windowIds)
     var replacements: [UInt32: UInt32] = [:]
@@ -457,12 +461,17 @@ func updateNativeTabState(
         }
     }
 
-    // Some apps remove the selected tab's old window id before exposing the next selected tab. Pair the single
-    // disappeared selected id with the single previously-background id that became visible.
-    let disappearedSelected = previousOnScreen.subtracting(currentOnScreen).subtracting(windowIds)
-    let promotedBackground = currentOnScreen.subtracting(previousOnScreen).intersection(previousBackgroundTabs)
-    if let oldWindowId = disappearedSelected.singleOrNil(), let newWindowId = promotedBackground.singleOrNil() {
-        replacements[oldWindowId] = newWindowId
+    // Some apps remove the selected tab's old window id before exposing the next selected tab. Match the
+    // promotion within its previous group because the group's signature and membership can change after closing.
+    for ids in previousGroups.values {
+        let disappearedSelected = ids.intersection(previousOnScreen).subtracting(currentOnScreen).subtracting(windowIds)
+        let promotedBackground = ids.intersection(currentOnScreen).subtracting(previousOnScreen).intersection(previousBackgroundTabs)
+        if let oldWindowId = disappearedSelected.singleOrNil(),
+           let newWindowId = promotedBackground.singleOrNil(),
+           !replacements.values.contains(newWindowId)
+        {
+            replacements[oldWindowId] = newWindowId
+        }
     }
 
     for (oldWindowId, newWindowId) in replacements {
