@@ -358,10 +358,18 @@ final class MacApp: AbstractApp {
             job.cancel()
         }
         setFrameJobs = [:]
-        thread?.runInLoopAsync { [windows, appAxSubscriptions, axApp] job in
+        thread?.runInLoopAsync {
+            [
+                windows, appAxSubscriptions, axApp, previousOnScreenWindowIds, backgroundTabWindowIds,
+                previousNativeTabGroups, previousNativeTabWindowIds,
+            ] job in
             appAxSubscriptions.destroy() // Destroy AX objects in reverse order of their creation
             windows.destroy()
             axApp.destroy()
+            previousOnScreenWindowIds.destroy()
+            backgroundTabWindowIds.destroy()
+            previousNativeTabGroups.destroy()
+            previousNativeTabWindowIds.destroy()
             CFRunLoopStop(CFRunLoopGetCurrent())
         }
         thread = nil // Disallow all future job submissions
