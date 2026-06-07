@@ -8,18 +8,8 @@ final class BackgroundTabTest: XCTestCase {
     func testValidatesCompleteNativeTabGroup() {
         XCTAssertEqual(
             validatedNativeTabGroups([
-                NativeTabGroupMember(signature: "shell", windowId: 10, selectedIndex: 0, tabCount: 2),
-                NativeTabGroupMember(signature: "shell", windowId: 11, selectedIndex: 1, tabCount: 2),
-            ]),
-            ["shell": [10, 11]],
-        )
-    }
-
-    func testValidatesNativeTabGroupWhenMembersReportSameSelectedIndex() {
-        XCTAssertEqual(
-            validatedNativeTabGroups([
-                NativeTabGroupMember(signature: "shell", windowId: 10, selectedIndex: 1, tabCount: 2),
-                NativeTabGroupMember(signature: "shell", windowId: 11, selectedIndex: 1, tabCount: 2),
+                NativeTabGroupMember(signature: "shell", windowId: 10, tabCount: 2),
+                NativeTabGroupMember(signature: "shell", windowId: 11, tabCount: 2),
             ]),
             ["shell": [10, 11]],
         )
@@ -28,10 +18,10 @@ final class BackgroundTabTest: XCTestCase {
     func testRejectsAmbiguousIdenticalNativeTabGroups() {
         XCTAssertEqual(
             validatedNativeTabGroups([
-                NativeTabGroupMember(signature: "shell", windowId: 10, selectedIndex: 0, tabCount: 2),
-                NativeTabGroupMember(signature: "shell", windowId: 11, selectedIndex: 1, tabCount: 2),
-                NativeTabGroupMember(signature: "shell", windowId: 12, selectedIndex: 0, tabCount: 2),
-                NativeTabGroupMember(signature: "shell", windowId: 13, selectedIndex: 1, tabCount: 2),
+                NativeTabGroupMember(signature: "shell", windowId: 10, tabCount: 2),
+                NativeTabGroupMember(signature: "shell", windowId: 11, tabCount: 2),
+                NativeTabGroupMember(signature: "shell", windowId: 12, tabCount: 2),
+                NativeTabGroupMember(signature: "shell", windowId: 13, tabCount: 2),
             ]),
             [:],
         )

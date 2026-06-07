@@ -316,7 +316,7 @@ final class MacApp: AbstractApp {
             let currentOnScreen = axWindowIds.intersection(onScreenWindowIds)
             let nativeTabMembers = nativeTabCandidates.compactMap { id, window in
                 window.nativeTabGroupMember.map {
-                    NativeTabGroupMember(signature: $0.signature, windowId: id, selectedIndex: $0.selectedIndex, tabCount: $0.tabCount)
+                    NativeTabGroupMember(signature: $0.signature, windowId: id, tabCount: $0.tabCount)
                 }
             }
             let groups = validatedNativeTabGroups(nativeTabMembers)
@@ -460,7 +460,6 @@ struct NativeTabState: Equatable {
 struct NativeTabGroupMember: Equatable {
     var signature: String
     var windowId: UInt32
-    var selectedIndex: Int
     var tabCount: Int
 }
 
@@ -554,12 +553,12 @@ func updateNativeTabState(
 }
 
 extension AXUIElement {
-    fileprivate var nativeTabGroupMember: (signature: String, selectedIndex: Int, tabCount: Int)? {
+    fileprivate var nativeTabGroupMember: (signature: String, tabCount: Int)? {
         let tabGroups = (get(Ax.childrenAttr) ?? []).filter { $0.get(Ax.roleAttr) == kAXTabGroupRole }
         guard let tabGroup = tabGroups.singleOrNil() else { return nil }
         let tabs = (tabGroup.get(Ax.childrenAttr) ?? []).filter { $0.get(Ax.subroleAttr) == "AXTabButton" }
-        guard tabs.count > 1, let selectedIndex = tabs.firstIndex(where: { $0.get(Ax.valueAttr) == true }) else { return nil }
-        return (tabs.map { $0.get(Ax.titleAttr) ?? "" }.joined(separator: "\u{0}"), selectedIndex, tabs.count)
+        guard tabs.count > 1, tabs.contains(where: { $0.get(Ax.valueAttr) == true }) else { return nil }
+        return (tabs.map { $0.get(Ax.titleAttr) ?? "" }.joined(separator: "\u{0}"), tabs.count)
     }
 }
 
