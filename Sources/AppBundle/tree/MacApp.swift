@@ -330,12 +330,21 @@ final class MacApp: AbstractApp {
                 previousNativeTabWindowIds: previousNativeTabWindowIds.threadGuarded,
                 nativeTabWindowIds: nativeTabMembers.map(\.windowId).toSet(),
             )
-            if !currentOnScreen.isEmpty || axWindowIds.isEmpty {
-                previousOnScreenWindowIds.threadGuarded = currentOnScreen
-            }
+            let history = updateNativeTabHistory(
+                NativeTabHistory(
+                    onScreenWindowIds: previousOnScreenWindowIds.threadGuarded,
+                    groups: previousNativeTabGroups.threadGuarded,
+                    windowIds: previousNativeTabWindowIds.threadGuarded,
+                ),
+                currentOnScreen: currentOnScreen,
+                axWindowIds: axWindowIds,
+                groups: groups,
+                nativeTabWindowIds: nativeTabMembers.map(\.windowId).toSet(),
+            )
+            previousOnScreenWindowIds.threadGuarded = history.onScreenWindowIds
             backgroundTabWindowIds.threadGuarded = tabState.backgroundTabs
-            previousNativeTabGroups.threadGuarded = groups
-            previousNativeTabWindowIds.threadGuarded = nativeTabMembers.map(\.windowId).toSet()
+            previousNativeTabGroups.threadGuarded = history.groups
+            previousNativeTabWindowIds.threadGuarded = history.windowIds
 
             // Second line of defence against lock screen. See the first line of defence: closedWindowsCache
             // Second and third lines of defence are technically needed only to avoid potential flickering
@@ -461,6 +470,23 @@ struct NativeTabGroupMember: Equatable {
     var signature: String
     var windowId: UInt32
     var tabCount: Int
+}
+
+struct NativeTabHistory: Equatable {
+    var onScreenWindowIds: Set<UInt32>
+    var groups: [String: Set<UInt32>]
+    var windowIds: Set<UInt32>
+}
+
+func updateNativeTabHistory(
+    _ previous: NativeTabHistory,
+    currentOnScreen: Set<UInt32>,
+    axWindowIds: Set<UInt32>,
+    groups: [String: Set<UInt32>],
+    nativeTabWindowIds: Set<UInt32>,
+) -> NativeTabHistory {
+    guard !currentOnScreen.isEmpty || axWindowIds.isEmpty else { return previous }
+    return NativeTabHistory(onScreenWindowIds: currentOnScreen, groups: groups, windowIds: nativeTabWindowIds)
 }
 
 func validatedNativeTabGroups(_ members: [NativeTabGroupMember]) -> [String: Set<UInt32>] {

@@ -126,6 +126,47 @@ final class BackgroundTabTest: XCTestCase {
         )
     }
 
+    func testPromotesNextTabAfterTransientEmptyOnScreenFrame() {
+        let initialHistory = NativeTabHistory(
+            onScreenWindowIds: [10],
+            groups: ["shell": [10, 11, 12]],
+            windowIds: [10, 11, 12],
+        )
+        let intermediate = updateNativeTabState(
+            groups: ["shell": [11, 12]],
+            windowIds: [11, 12],
+            previousOnScreen: initialHistory.onScreenWindowIds,
+            currentOnScreen: [],
+            previousBackgroundTabs: [11, 12],
+            previousGroups: initialHistory.groups,
+            previousNativeTabWindowIds: initialHistory.windowIds,
+            nativeTabWindowIds: [11, 12],
+        )
+        XCTAssertEqual(intermediate, NativeTabState(backgroundTabs: [11, 12], replacements: [:]))
+        let intermediateHistory = updateNativeTabHistory(
+            initialHistory,
+            currentOnScreen: [],
+            axWindowIds: [11, 12],
+            groups: ["shell": [11, 12]],
+            nativeTabWindowIds: [11, 12],
+        )
+        XCTAssertEqual(intermediateHistory, initialHistory)
+
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: ["shell": [11, 12]],
+                windowIds: [11, 12],
+                previousOnScreen: intermediateHistory.onScreenWindowIds,
+                currentOnScreen: [11],
+                previousBackgroundTabs: intermediate.backgroundTabs,
+                previousGroups: intermediateHistory.groups,
+                previousNativeTabWindowIds: intermediateHistory.windowIds,
+                nativeTabWindowIds: [11, 12],
+            ),
+            NativeTabState(backgroundTabs: [12], replacements: [10: 11]),
+        )
+    }
+
     func testDoesNotPairUnrelatedClosedWindowWithPromotedTab() {
         XCTAssertEqual(
             updateNativeTabState(
