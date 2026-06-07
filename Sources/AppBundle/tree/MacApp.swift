@@ -5,6 +5,13 @@ import Common
 // https://github.com/swiftlang/swift-evolution/blob/main/proposals/0392-custom-actor-executors.md
 // (only available since macOS 14)
 final class MacApp: AbstractApp {
+    static let registrationRetryDelays: [Duration] = [
+        .milliseconds(10),
+        .milliseconds(25),
+        .milliseconds(50),
+        .milliseconds(100),
+    ]
+
     /*conforms*/ let pid: Int32
     /*conforms*/ let rawAppBundleId: String?
     let appId: KnownBundleId?
@@ -51,12 +58,19 @@ final class MacApp: AbstractApp {
         let pid = nsApp.processIdentifier
         // AX requests crash if you send them to yourself
         if pid == myPid { return nil }
+        var failedAttempts = 0
 
         while true {
             if let existing = allAppsMap[pid] { return existing }
+            if nsApp.isTerminated { return nil }
             try checkCancellation()
             if let wip = wipPids[pid] {
                 try await wip.await()
+                if allAppsMap[pid] == nil {
+                    guard !nsApp.isTerminated, failedAttempts < registrationRetryDelays.count else { return nil }
+                    try await Task.sleep(for: registrationRetryDelays[failedAttempts])
+                    failedAttempts += 1
+                }
                 continue
             }
             let wip = AwaitableOneTimeBroadcastLatch()
