@@ -562,7 +562,8 @@ func updateNativeTabState(
     if let oldWindowId = becameOffScreenNativeTab.singleOrNil(),
        let newWindowId = becameOnScreenNativeTab.singleOrNil(),
        replacements[oldWindowId] == nil,
-       !replacements.values.contains(newWindowId)
+       !replacements.values.contains(newWindowId),
+       previousGroups.isEmpty || previousGroups.values.contains(where: { $0.contains(oldWindowId) && $0.contains(newWindowId) })
     {
         replacements[oldWindowId] = newWindowId
     }

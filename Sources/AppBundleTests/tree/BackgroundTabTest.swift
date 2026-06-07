@@ -85,6 +85,25 @@ final class BackgroundTabTest: XCTestCase {
         )
     }
 
+    func testDoesNotReplaceTabAcrossGroupsDuringSpaceChange() {
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: [:],
+                windowIds: [10, 11, 20, 21],
+                previousOnScreen: [10],
+                currentOnScreen: [20],
+                previousBackgroundTabs: [11, 21],
+                previousGroups: [
+                    "shell": [10, 11],
+                    "editor": [20, 21],
+                ],
+                previousNativeTabWindowIds: [10, 11, 20, 21],
+                nativeTabWindowIds: [10, 11, 20, 21],
+            ),
+            NativeTabState(backgroundTabs: [11, 21], replacements: [:]),
+        )
+    }
+
     func testDoesNotReplaceTabWhenGroupReturnsFromOffScreenUnchanged() {
         XCTAssertEqual(
             updateNativeTabState(
