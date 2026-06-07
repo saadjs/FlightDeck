@@ -15,6 +15,7 @@ final class MacApp: AbstractApp {
     private let previousOnScreenWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
     private let backgroundTabWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
     private let previousNativeTabGroups: ThreadGuardedValue<[String: Set<UInt32>]> = .init([:])
+    private let previousNativeTabWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
     private var windowsCount = 0
     var lastNativeFocusedWindowId: UInt32? = nil
     private var thread: Thread?
@@ -283,7 +284,10 @@ final class MacApp: AbstractApp {
         }
         guard let thread else { return AppRefreshResult() }
         let result = try await thread.runInLoop {
-            [nsApp, windows, axApp, previousOnScreenWindowIds, backgroundTabWindowIds, previousNativeTabGroups] (job) -> AppRefreshResult in
+            [
+                nsApp, windows, axApp, previousOnScreenWindowIds, backgroundTabWindowIds,
+                previousNativeTabGroups, previousNativeTabWindowIds,
+            ] (job) -> AppRefreshResult in
             var alive: [UInt32: AxWindow] = windows.threadGuarded
             var dead = [UInt32: AxWindow]()
             let axWindows = axApp.threadGuarded.get(Ax.windowsAttr) ?? []
@@ -309,6 +313,7 @@ final class MacApp: AbstractApp {
                 currentOnScreen: currentOnScreen,
                 previousBackgroundTabs: backgroundTabWindowIds.threadGuarded,
                 previousGroups: previousNativeTabGroups.threadGuarded,
+                previousNativeTabWindowIds: previousNativeTabWindowIds.threadGuarded,
                 nativeTabWindowIds: nativeTabMembers.map(\.windowId).toSet(),
             )
             if !currentOnScreen.isEmpty || axWindowIds.isEmpty {
@@ -316,6 +321,7 @@ final class MacApp: AbstractApp {
             }
             backgroundTabWindowIds.threadGuarded = tabState.backgroundTabs
             previousNativeTabGroups.threadGuarded = groups
+            previousNativeTabWindowIds.threadGuarded = nativeTabMembers.map(\.windowId).toSet()
 
             // Second line of defence against lock screen. See the first line of defence: closedWindowsCache
             // Second and third lines of defence are technically needed only to avoid potential flickering
@@ -456,6 +462,7 @@ func updateNativeTabState(
     currentOnScreen: Set<UInt32>,
     previousBackgroundTabs: Set<UInt32>,
     previousGroups: [String: Set<UInt32>] = [:],
+    previousNativeTabWindowIds: Set<UInt32> = [],
     nativeTabWindowIds: Set<UInt32> = [],
 ) -> NativeTabState {
     var backgroundTabs = previousBackgroundTabs.intersection(windowIds)
@@ -498,11 +505,14 @@ func updateNativeTabState(
         }
     }
 
-    let becameOffScreen = previousOnScreen.intersection(windowIds).subtracting(currentOnScreen)
+    let becameOffScreenNativeTab = previousOnScreen
+        .intersection(windowIds)
+        .subtracting(currentOnScreen)
+        .intersection(previousNativeTabWindowIds)
     let becameOnScreenNativeTab = currentOnScreen
         .subtracting(previousOnScreen)
         .intersection(nativeTabWindowIds)
-    if let oldWindowId = becameOffScreen.singleOrNil(),
+    if let oldWindowId = becameOffScreenNativeTab.singleOrNil(),
        let newWindowId = becameOnScreenNativeTab.singleOrNil(),
        replacements[oldWindowId] == nil,
        !replacements.values.contains(newWindowId)

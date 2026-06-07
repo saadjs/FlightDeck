@@ -72,9 +72,26 @@ final class BackgroundTabTest: XCTestCase {
                 previousOnScreen: [10],
                 currentOnScreen: [11],
                 previousBackgroundTabs: [],
+                previousNativeTabWindowIds: [10],
                 nativeTabWindowIds: [11],
             ),
             NativeTabState(backgroundTabs: [10], replacements: [10: 11]),
+        )
+    }
+
+    func testDoesNotReplaceUnrelatedWindowWithNativeTabDuringSpaceChange() {
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: ["shell": [10, 11]],
+                windowIds: [10, 11, 20],
+                previousOnScreen: [20],
+                currentOnScreen: [10],
+                previousBackgroundTabs: [11],
+                previousGroups: ["shell": [10, 11]],
+                previousNativeTabWindowIds: [10, 11],
+                nativeTabWindowIds: [10, 11],
+            ),
+            NativeTabState(backgroundTabs: [11], replacements: [:]),
         )
     }
 
