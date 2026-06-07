@@ -140,7 +140,8 @@ private func refresh() async throws {
     }
     for (app, result) in mapping {
         for windowId in result.aliveWindowIds {
-            try await MacWindow.getOrRegister(windowId: windowId, macApp: app)
+            let window = try await MacWindow.getOrRegister(windowId: windowId, macApp: app)
+            try await window.runPendingOnWindowDetected()
         }
     }
 

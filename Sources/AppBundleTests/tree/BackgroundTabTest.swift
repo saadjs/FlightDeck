@@ -1,7 +1,10 @@
 @testable import AppBundle
 import XCTest
 
+@MainActor
 final class BackgroundTabTest: XCTestCase {
+    override func setUp() async throws { setUpWorkspacesForTests() }
+
     func testValidatesCompleteNativeTabGroup() {
         XCTAssertEqual(
             validatedNativeTabGroups([
@@ -102,5 +105,26 @@ final class BackgroundTabTest: XCTestCase {
             ),
             NativeTabState(backgroundTabs: [], replacements: [:]),
         )
+    }
+
+    func testDefersDetectionForFocusedWindowUntilRefresh() async throws {
+        let originalWorkspace = Workspace.get(byName: "original")
+        let callbackWorkspace = Workspace.get(byName: "callback")
+        let window = TestWindow.new(id: 10, parent: originalWorkspace.rootTilingContainer)
+        config.onWindowDetected = [
+            WindowDetectedCallback(rawRun: [parseCommand("move-node-to-workspace callback").cmdOrDie]),
+        ]
+
+        window.deferOnWindowDetected()
+
+        XCTAssertEqual(window.nodeWorkspace, originalWorkspace)
+        try await window.runPendingOnWindowDetected()
+        XCTAssertEqual(window.nodeWorkspace, callbackWorkspace)
+
+        config.onWindowDetected = [
+            WindowDetectedCallback(rawRun: [parseCommand("move-node-to-workspace original").cmdOrDie]),
+        ]
+        try await window.runPendingOnWindowDetected()
+        XCTAssertEqual(window.nodeWorkspace, callbackWorkspace)
     }
 }

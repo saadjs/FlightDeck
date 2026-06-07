@@ -111,7 +111,7 @@ final class MacApp: AbstractApp {
                 .windowId
         }
         guard let windowId else { return nil }
-        return try await MacWindow.getOrRegister(windowId: windowId, macApp: self)
+        return try await MacWindow.getOrRegister(windowId: windowId, macApp: self, deferOnWindowDetected: true)
     }
 
     @MainActor func nativeFocus(_ windowId: UInt32) {

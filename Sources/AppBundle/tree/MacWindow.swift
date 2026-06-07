@@ -26,7 +26,7 @@ final class MacWindow: Window {
 
     @MainActor
     @discardableResult
-    static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
+    static func getOrRegister(windowId: UInt32, macApp: MacApp, deferOnWindowDetected: Bool = false) async throws -> MacWindow {
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId)
         let data = try await unbindAndGetBindingDataForNewWindow(
@@ -45,7 +45,11 @@ final class MacWindow: Window {
 
         try await debugWindowsIfRecording(window)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
-            try await tryOnWindowDetected(window)
+            if deferOnWindowDetected {
+                window.deferOnWindowDetected()
+            } else {
+                try await tryOnWindowDetected(window)
+            }
         }
         return window
     }

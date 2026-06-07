@@ -8,6 +8,7 @@ open class Window: TreeNode, Hashable {
     var isFullscreen: Bool = false
     var noOuterGapsInFullscreen: Bool = false
     var layoutReason: LayoutReason = .standard
+    private var isOnWindowDetectedPending = false
 
     @MainActor
     init(id: UInt32, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -19,6 +20,18 @@ open class Window: TreeNode, Hashable {
 
     func replaceWindowId(with windowId: UInt32) {
         self.windowId = windowId
+    }
+
+    @MainActor
+    func deferOnWindowDetected() {
+        isOnWindowDetectedPending = true
+    }
+
+    @MainActor
+    func runPendingOnWindowDetected() async throws {
+        guard isOnWindowDetectedPending else { return }
+        isOnWindowDetectedPending = false
+        try await tryOnWindowDetected(self)
     }
 
     @MainActor static func get(byId windowId: UInt32) -> Window? { // todo make non optional
