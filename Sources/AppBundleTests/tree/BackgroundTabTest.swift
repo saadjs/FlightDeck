@@ -15,6 +15,16 @@ final class BackgroundTabTest: XCTestCase {
         )
     }
 
+    func testValidatesNativeTabGroupWhenMembersReportSameSelectedIndex() {
+        XCTAssertEqual(
+            validatedNativeTabGroups([
+                NativeTabGroupMember(signature: "shell", windowId: 10, selectedIndex: 1, tabCount: 2),
+                NativeTabGroupMember(signature: "shell", windowId: 11, selectedIndex: 1, tabCount: 2),
+            ]),
+            ["shell": [10, 11]],
+        )
+    }
+
     func testRejectsAmbiguousIdenticalNativeTabGroups() {
         XCTAssertEqual(
             validatedNativeTabGroups([
@@ -37,6 +47,48 @@ final class BackgroundTabTest: XCTestCase {
                 previousBackgroundTabs: [11],
             ),
             NativeTabState(backgroundTabs: [10], replacements: [10: 11]),
+        )
+    }
+
+    func testDetectsNativeTabSelectionSwapWhileGroupWasOffScreen() {
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: ["shell": [10, 11]],
+                windowIds: [10, 11],
+                previousOnScreen: [],
+                currentOnScreen: [11],
+                previousBackgroundTabs: [11],
+                previousGroups: ["shell": [10, 11]],
+            ),
+            NativeTabState(backgroundTabs: [10], replacements: [10: 11]),
+        )
+    }
+
+    func testDetectsNativeTabSelectionSwapFromIncompleteGroup() {
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: [:],
+                windowIds: [10, 11],
+                previousOnScreen: [10],
+                currentOnScreen: [11],
+                previousBackgroundTabs: [],
+                nativeTabWindowIds: [11],
+            ),
+            NativeTabState(backgroundTabs: [10], replacements: [10: 11]),
+        )
+    }
+
+    func testDoesNotReplaceTabWhenGroupReturnsFromOffScreenUnchanged() {
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: ["shell": [10, 11]],
+                windowIds: [10, 11],
+                previousOnScreen: [],
+                currentOnScreen: [10],
+                previousBackgroundTabs: [11],
+                previousGroups: ["shell": [10, 11]],
+            ),
+            NativeTabState(backgroundTabs: [11], replacements: [:]),
         )
     }
 

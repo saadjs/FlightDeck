@@ -288,21 +288,32 @@ final class MacApp: AbstractApp {
             var dead = [UInt32: AxWindow]()
             let axWindows = axApp.threadGuarded.get(Ax.windowsAttr) ?? []
             let axWindowIds = axWindows.map(\.windowId).toSet()
+            let registeredWindowIds = alive.compactMap { id, window in
+                window.ax.containingWindowId() != nil ? id : nil
+            }.toSet()
+            var nativeTabCandidates = Dictionary(uniqueKeysWithValues: alive.map { ($0.key, $0.value.ax) })
+            for (id, window) in axWindows {
+                nativeTabCandidates[id] = window
+            }
             let currentOnScreen = axWindowIds.intersection(onScreenWindowIds)
-            let groups = validatedNativeTabGroups(axWindows.compactMap { window in
-                window.ax.nativeTabGroupMember.map {
-                    NativeTabGroupMember(signature: $0.signature, windowId: window.windowId, selectedIndex: $0.selectedIndex, tabCount: $0.tabCount)
+            let nativeTabMembers = nativeTabCandidates.compactMap { id, window in
+                window.nativeTabGroupMember.map {
+                    NativeTabGroupMember(signature: $0.signature, windowId: id, selectedIndex: $0.selectedIndex, tabCount: $0.tabCount)
                 }
-            })
+            }
+            let groups = validatedNativeTabGroups(nativeTabMembers)
             let tabState = updateNativeTabState(
                 groups: groups,
-                windowIds: axWindowIds,
+                windowIds: axWindowIds.union(registeredWindowIds),
                 previousOnScreen: previousOnScreenWindowIds.threadGuarded,
                 currentOnScreen: currentOnScreen,
                 previousBackgroundTabs: backgroundTabWindowIds.threadGuarded,
                 previousGroups: previousNativeTabGroups.threadGuarded,
+                nativeTabWindowIds: nativeTabMembers.map(\.windowId).toSet(),
             )
-            previousOnScreenWindowIds.threadGuarded = currentOnScreen
+            if !currentOnScreen.isEmpty || axWindowIds.isEmpty {
+                previousOnScreenWindowIds.threadGuarded = currentOnScreen
+            }
             backgroundTabWindowIds.threadGuarded = tabState.backgroundTabs
             previousNativeTabGroups.threadGuarded = groups
 
@@ -311,7 +322,7 @@ final class MacApp: AbstractApp {
             if frontmostAppBundleId != lockScreenAppBundleId {
                 (alive, dead) = try alive.partition {
                     try job.checkCancellation()
-                    return $0.value.ax.containingWindowId() != nil && !tabState.backgroundTabs.contains($0.key)
+                    return $0.value.ax.containingWindowId() != nil
                 }
             }
 
@@ -322,7 +333,11 @@ final class MacApp: AbstractApp {
             }
 
             windows.threadGuarded = alive
-            return AppRefreshResult(aliveWindowIds: Array(alive.keys), deadWindowIds: Array(dead.keys), replacements: tabState.replacements)
+            return AppRefreshResult(
+                aliveWindowIds: Array(alive.keys.filter { !tabState.backgroundTabs.contains($0) }),
+                deadWindowIds: Array(dead.keys),
+                replacements: tabState.replacements,
+            )
         }
         windowsCount = result.aliveWindowIds.count
         for windowId in result.deadWindowIds {
@@ -426,8 +441,7 @@ func validatedNativeTabGroups(_ members: [NativeTabGroupMember]) -> [String: Set
         guard let tabCount = group.first?.tabCount,
               tabCount > 1,
               group.count == tabCount,
-              group.allSatisfy({ $0.tabCount == tabCount }),
-              group.map(\.selectedIndex).toSet().count == tabCount
+              group.allSatisfy({ $0.tabCount == tabCount })
         else {
             return nil
         }
@@ -442,13 +456,14 @@ func updateNativeTabState(
     currentOnScreen: Set<UInt32>,
     previousBackgroundTabs: Set<UInt32>,
     previousGroups: [String: Set<UInt32>] = [:],
+    nativeTabWindowIds: Set<UInt32> = [],
 ) -> NativeTabState {
     var backgroundTabs = previousBackgroundTabs.intersection(windowIds)
     var replacements: [UInt32: UInt32] = [:]
 
     // Seed restored/new tab groups. Requiring exactly one on-screen member avoids mistaking a group on an
     // inactive native macOS Space (zero on-screen members) or an ambiguous signature (multiple) for background tabs.
-    for ids in groups.values {
+    for (signature, ids) in groups {
         let onScreen = ids.intersection(currentOnScreen)
         if onScreen.count == 1 {
             backgroundTabs.formUnion(ids.subtracting(onScreen))
@@ -457,6 +472,15 @@ func updateNativeTabState(
         let becameOffScreen = ids.intersection(previousOnScreen).subtracting(currentOnScreen)
         let becameOnScreen = ids.intersection(currentOnScreen).subtracting(previousOnScreen)
         if let oldWindowId = becameOffScreen.singleOrNil(), let newWindowId = becameOnScreen.singleOrNil() {
+            replacements[oldWindowId] = newWindowId
+        } else if ids.intersection(previousOnScreen).isEmpty,
+                  let previousIds = previousGroups[signature],
+                  let oldWindowId = previousIds.subtracting(previousBackgroundTabs).singleOrNil(),
+                  let newWindowId = onScreen.singleOrNil(),
+                  oldWindowId != newWindowId
+        {
+            // The whole group was off-screen during the previous refresh, so the last selected member is
+            // identified by the previous group's only non-background tab.
             replacements[oldWindowId] = newWindowId
         }
     }
@@ -472,6 +496,18 @@ func updateNativeTabState(
         {
             replacements[oldWindowId] = newWindowId
         }
+    }
+
+    let becameOffScreen = previousOnScreen.intersection(windowIds).subtracting(currentOnScreen)
+    let becameOnScreenNativeTab = currentOnScreen
+        .subtracting(previousOnScreen)
+        .intersection(nativeTabWindowIds)
+    if let oldWindowId = becameOffScreen.singleOrNil(),
+       let newWindowId = becameOnScreenNativeTab.singleOrNil(),
+       replacements[oldWindowId] == nil,
+       !replacements.values.contains(newWindowId)
+    {
+        replacements[oldWindowId] = newWindowId
     }
 
     for (oldWindowId, newWindowId) in replacements {
