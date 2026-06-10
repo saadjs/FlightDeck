@@ -23,6 +23,7 @@ final class MacApp: AbstractApp {
     private let backgroundTabWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
     private let previousNativeTabGroups: ThreadGuardedValue<[String: Set<UInt32>]> = .init([:])
     private let previousNativeTabWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
+    private let previousAxWindowIds: ThreadGuardedValue<Set<UInt32>> = .init([])
     private var windowsCount = 0
     var lastNativeFocusedWindowId: UInt32? = nil
     private var thread: Thread?
@@ -300,7 +301,7 @@ final class MacApp: AbstractApp {
         let result = try await thread.runInLoop {
             [
                 nsApp, windows, axApp, previousOnScreenWindowIds, backgroundTabWindowIds,
-                previousNativeTabGroups, previousNativeTabWindowIds,
+                previousNativeTabGroups, previousNativeTabWindowIds, previousAxWindowIds,
             ] (job) -> AppRefreshResult in
             var alive: [UInt32: AxWindow] = windows.threadGuarded
             var dead = [UInt32: AxWindow]()
@@ -309,6 +310,16 @@ final class MacApp: AbstractApp {
             let registeredWindowIds = alive.compactMap { id, window in
                 window.ax.containingWindowId() != nil ? id : nil
             }.toSet()
+            // Newer macOS removes a background native tab's window from kAXWindowsAttribute entirely while
+            // its AX element stays valid. Minimized and hidden-app windows remain listed, but a
+            // native-fullscreen window on an inactive Space is also delisted — exclude it via the AX
+            // fullscreen attribute. Windows on other user-created macOS Spaces share the delisted state and
+            // are treated like closed windows (they are re-detected when their Space becomes active).
+            var delistedWindowIds: Set<UInt32> = []
+            if frontmostAppBundleId != lockScreenAppBundleId && !axWindowIds.isEmpty {
+                delistedWindowIds = registeredWindowIds.subtracting(axWindowIds)
+                    .filter { alive[$0]?.ax.get(Ax.isFullscreenAttr) != true }
+            }
             var nativeTabCandidates = Dictionary(uniqueKeysWithValues: alive.map { ($0.key, $0.value.ax) })
             for (id, window) in axWindows {
                 nativeTabCandidates[id] = window
@@ -329,6 +340,9 @@ final class MacApp: AbstractApp {
                 previousGroups: previousNativeTabGroups.threadGuarded,
                 previousNativeTabWindowIds: previousNativeTabWindowIds.threadGuarded,
                 nativeTabWindowIds: nativeTabMembers.map(\.windowId).toSet(),
+                delistedWindowIds: delistedWindowIds,
+                previousAxWindowIds: previousAxWindowIds.threadGuarded,
+                axWindowIds: axWindowIds,
             )
             let history = updateNativeTabHistory(
                 NativeTabHistory(
@@ -345,6 +359,7 @@ final class MacApp: AbstractApp {
             backgroundTabWindowIds.threadGuarded = tabState.backgroundTabs
             previousNativeTabGroups.threadGuarded = history.groups
             previousNativeTabWindowIds.threadGuarded = history.windowIds
+            previousAxWindowIds.threadGuarded = axWindowIds
 
             // Second line of defence against lock screen. See the first line of defence: closedWindowsCache
             // Second and third lines of defence are technically needed only to avoid potential flickering
@@ -384,7 +399,7 @@ final class MacApp: AbstractApp {
         thread?.runInLoopAsync {
             [
                 windows, appAxSubscriptions, axApp, previousOnScreenWindowIds, backgroundTabWindowIds,
-                previousNativeTabGroups, previousNativeTabWindowIds,
+                previousNativeTabGroups, previousNativeTabWindowIds, previousAxWindowIds,
             ] job in
             appAxSubscriptions.destroy() // Destroy AX objects in reverse order of their creation
             windows.destroy()
@@ -393,6 +408,7 @@ final class MacApp: AbstractApp {
             backgroundTabWindowIds.destroy()
             previousNativeTabGroups.destroy()
             previousNativeTabWindowIds.destroy()
+            previousAxWindowIds.destroy()
             CFRunLoopStop(CFRunLoopGetCurrent())
         }
         thread = nil // Disallow all future job submissions
@@ -511,9 +527,26 @@ func updateNativeTabState(
     previousGroups: [String: Set<UInt32>] = [:],
     previousNativeTabWindowIds: Set<UInt32> = [],
     nativeTabWindowIds: Set<UInt32> = [],
+    delistedWindowIds: Set<UInt32> = [],
+    previousAxWindowIds: Set<UInt32> = [],
+    axWindowIds: Set<UInt32> = [],
 ) -> NativeTabState {
     var backgroundTabs = previousBackgroundTabs.intersection(windowIds)
     var replacements: [UInt32: UInt32] = [:]
+
+    // The strongest signal: a previously-visible window was just removed from kAXWindowsAttribute (but
+    // stays AX-valid) in the same refresh that a tab window appeared in it — the new tab replaced the old
+    // window on screen. This covers both creating the first tab in a window and switching tabs, and does
+    // not depend on the on-screen snapshot, which can lag behind the AX list mid-transition.
+    let becameDelisted = delistedWindowIds.intersection(previousAxWindowIds).intersection(previousOnScreen)
+    let becameListed = axWindowIds.subtracting(previousAxWindowIds)
+    if let oldWindowId = becameDelisted.singleOrNil(),
+       let newWindowId = becameListed.singleOrNil(),
+       oldWindowId != newWindowId,
+       nativeTabWindowIds.contains(newWindowId) || currentOnScreen.contains(newWindowId)
+    {
+        replacements[oldWindowId] = newWindowId
+    }
 
     // Seed restored/new tab groups. Requiring exactly one on-screen member avoids mistaking a group on an
     // inactive native macOS Space (zero on-screen members) or an ambiguous signature (multiple) for background tabs.
@@ -576,6 +609,8 @@ func updateNativeTabState(
     }
     // A visible tab must never remain excluded, even if an app reports an unexpected transition.
     backgroundTabs.subtract(currentOnScreen)
+    // A delisted window is ordered out by definition — a stale on-screen snapshot must not resurrect it.
+    backgroundTabs.formUnion(delistedWindowIds)
     return NativeTabState(backgroundTabs: backgroundTabs, replacements: replacements)
 }
 

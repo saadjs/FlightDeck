@@ -226,6 +226,94 @@ final class BackgroundTabTest: XCTestCase {
         )
     }
 
+    func testPairsDelistedWindowWithNewTabOnFirstTabCreation() {
+        // The old window leaves kAXWindowsAttribute (but stays AX-valid) while the new selected tab appears.
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: [:],
+                windowIds: [10, 11, 20],
+                previousOnScreen: [10, 20],
+                currentOnScreen: [11, 20],
+                previousBackgroundTabs: [],
+                nativeTabWindowIds: [11],
+                delistedWindowIds: [10],
+                previousAxWindowIds: [10, 20],
+                axWindowIds: [11, 20],
+            ),
+            NativeTabState(backgroundTabs: [10], replacements: [10: 11]),
+        )
+    }
+
+    func testPairsDelistedWindowDespiteStaleOnScreenSnapshot() {
+        // The CG on-screen snapshot can lag the AX list mid-transition: the old window still looks
+        // on-screen and the new tab does not. The AX tab group on the new window is enough evidence.
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: [:],
+                windowIds: [10, 11, 20],
+                previousOnScreen: [10, 20],
+                currentOnScreen: [10, 20],
+                previousBackgroundTabs: [],
+                nativeTabWindowIds: [11],
+                delistedWindowIds: [10],
+                previousAxWindowIds: [10, 20],
+                axWindowIds: [11, 20],
+            ),
+            NativeTabState(backgroundTabs: [10], replacements: [10: 11]),
+        )
+    }
+
+    func testMarksUnpairedDelistedWindowsAsBackground() {
+        // "Merge All Windows": several windows become tabs at once; no new window appears, so there is
+        // no pairing, and the delisted windows must lose their tiles.
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: [:],
+                windowIds: [10, 11, 12],
+                previousOnScreen: [10, 11, 12],
+                currentOnScreen: [10],
+                previousBackgroundTabs: [],
+                nativeTabWindowIds: [10],
+                delistedWindowIds: [11, 12],
+                previousAxWindowIds: [10, 11, 12],
+                axWindowIds: [10],
+            ),
+            NativeTabState(backgroundTabs: [11, 12], replacements: [:]),
+        )
+    }
+
+    func testDoesNotPairWhenMultipleWindowsAppearSimultaneously() {
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: [:],
+                windowIds: [10, 11, 30],
+                previousOnScreen: [10],
+                currentOnScreen: [11, 30],
+                previousBackgroundTabs: [],
+                nativeTabWindowIds: [11],
+                delistedWindowIds: [10],
+                previousAxWindowIds: [10],
+                axWindowIds: [11, 30],
+            ),
+            NativeTabState(backgroundTabs: [10], replacements: [:]),
+        )
+    }
+
+    func testDoesNotPairPlainNewWindowWithoutDelisting() {
+        XCTAssertEqual(
+            updateNativeTabState(
+                groups: [:],
+                windowIds: [10, 30],
+                previousOnScreen: [10],
+                currentOnScreen: [10, 30],
+                previousBackgroundTabs: [],
+                previousAxWindowIds: [10],
+                axWindowIds: [10, 30],
+            ),
+            NativeTabState(backgroundTabs: [], replacements: [:]),
+        )
+    }
+
     func testDefersDetectionForFocusedWindowUntilRefresh() async throws {
         let originalWorkspace = Workspace.get(byName: "original")
         let callbackWorkspace = Workspace.get(byName: "callback")
