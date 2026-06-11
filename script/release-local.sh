@@ -7,6 +7,7 @@ tap_git_repo_path="${FLIGHTDECK_HOMEBREW_TAP_PATH:-$HOME/src/homebrew-tap}"
 team_id="${FLIGHTDECK_TEAM_ID:-2ZPA772V9V}"
 codesign_identity="${DEVELOPER_ID_APPLICATION:-}"
 notary_profile="${FLIGHTDECK_NOTARY_PROFILE:-flightdeck-notary}"
+cask_name="flightdeck"
 run_tests=1
 while test $# -gt 0; do
     case $1 in
@@ -15,6 +16,7 @@ while test $# -gt 0; do
         --team-id) team_id="$2"; shift 2;;
         --codesign-identity) codesign_identity="$2"; shift 2;;
         --notary-profile) notary_profile="$2"; shift 2;;
+        --cask-name) cask_name="$2"; shift 2;;
         --skip-tests) run_tests=0; shift 1;;
         *) echo "Unknown option $1"; exit 1;;
     esac
@@ -49,14 +51,14 @@ release_zip="FlightDeck-v$build_version.zip"
 release_url="https://github.com/saadjs/FlightDeck/releases/download/v$build_version/$release_zip"
 
 ./script/build-brew-cask.sh \
-    --cask-name flightdeck \
+    --cask-name "$cask_name" \
     --zip-uri ".release/$release_zip" \
     --cask-zip-uri "$release_url" \
     --build-version "$build_version"
 
-cp -r .release/flightdeck.rb "$tap_git_repo_path/Casks/flightdeck.rb"
+cp -r ".release/$cask_name.rb" "$tap_git_repo_path/Casks/$cask_name.rb"
 
 echo
 echo "Release artifact: .release/$release_zip"
-echo "Tap cask: $tap_git_repo_path/Casks/flightdeck.rb"
+echo "Tap cask: $tap_git_repo_path/Casks/$cask_name.rb"
 echo "Upload .release/$release_zip to $release_url before pushing the tap update."

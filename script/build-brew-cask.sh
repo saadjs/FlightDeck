@@ -20,9 +20,10 @@ if test -z "$zip_uri"; then echo "--zip-uri is mandatory" > /dev/stderr; exit 1;
 if test -z "$cask_name"; then echo "--cask-name is mandatory" > /dev/stderr; exit 1; fi
 
 case "$cask_name" in
-    flightdeck) conflicts_with_casks='conflicts_with cask: "flightdeck-dev"';;
-    flightdeck-dev) conflicts_with_casks='conflicts_with cask: "flightdeck"';;
-    *) echo "Unknown cask name: $cask_name. Allowed cask names: flightdeck, flightdeck-dev" > /dev/stderr; exit 1;;
+    flightdeck) conflicts_with_casks='conflicts_with cask: ["flightdeck-dev", "flightdeck-beta"]';;
+    flightdeck-dev) conflicts_with_casks='conflicts_with cask: ["flightdeck", "flightdeck-beta"]';;
+    flightdeck-beta) conflicts_with_casks='conflicts_with cask: ["flightdeck", "flightdeck-dev"]';;
+    *) echo "Unknown cask name: $cask_name. Allowed cask names: flightdeck, flightdeck-dev, flightdeck-beta" > /dev/stderr; exit 1;;
 esac
 
 zip_file=''
