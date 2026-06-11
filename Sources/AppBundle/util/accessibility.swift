@@ -203,6 +203,10 @@ enum Ax {
         key: kAXEnabledAttribute,
         getter: { $0 as? Bool },
     )
+    static let valueAttr = ReadableAttrImpl<Bool>(
+        key: kAXValueAttribute,
+        getter: { $0 as? Bool },
+    )
     static let enhancedUserInterfaceAttr = WritableAttrImpl<Bool>(
         key: "AXEnhancedUserInterface",
         getter: { $0 as? Bool },
@@ -230,6 +234,10 @@ enum Ax {
         key: kAXMainAttribute,
         getter: { $0 as? Bool },
         setter: { $0 as CFTypeRef },
+    )
+    static let childrenAttr = ReadableAttrImpl<[AXUIElement]>(
+        key: kAXChildrenAttribute,
+        getter: { $0 as? [AXUIElement] },
     )
     static let sizeAttr = WritableAttrImpl<CGSize>(
         key: kAXSizeAttribute,
