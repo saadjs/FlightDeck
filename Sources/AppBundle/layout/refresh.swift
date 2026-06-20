@@ -10,7 +10,7 @@ func scheduleCancellableCompleteRefreshSession(
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
     activeRefreshTask?.cancel()
-    activeRefreshTask = Task { @MainActor in
+    activeRefreshTask = Task.startUnstructured { @MainActor in
         try checkCancellation()
         await runHeavyCompleteRefreshSession(
             event,
@@ -47,6 +47,7 @@ func runHeavyCompleteRefreshSession(
                 SecureInputPanel.shared.refresh()
                 try await normalizeLayoutReason()
                 if shouldLayoutWorkspaces { try await layoutWorkspaces() }
+                takeNativeFocusIfFocusedWorkspaceIsEmpty()
             }
         }
     }
@@ -86,6 +87,7 @@ func runLightSession<T>(
             if focusBefore != focusAfter {
                 focusAfter?.nativeFocus() // syncFocusToMacOs
             }
+            takeNativeFocusIfFocusedWorkspaceIsEmpty()
             scheduleCancellableCompleteRefreshSession(event)
             return result
         }
@@ -123,25 +125,19 @@ func refreshModel() {
 private func refresh() async throws {
     // Garbage collect terminated apps and windows before working with all windows
     let mapping = try await MacApp.refreshAllAndGetAliveWindowIds(frontmostAppBundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
-    for (_, result) in mapping {
-        for (oldWindowId, newWindowId) in result.replacements {
-            MacWindow.replaceWindowId(from: oldWindowId, to: newWindowId)
-        }
-    }
-    let aliveWindowIds = mapping.values.flatMap(\.aliveWindowIds).toSet()
+    let aliveWindowIds = mapping.values.flatMap(id).toSet()
 
     for window in MacWindow.allWindows {
         if !aliveWindowIds.contains(window.windowId) {
             window.garbageCollect(
                 skipClosedWindowsCache: false,
-                hasOtherLiveWindowsInApp: mapping[window.macApp]?.aliveWindowIds.contains { $0 != window.windowId } == true,
+                hasOtherLiveWindowsInApp: mapping[window.macApp]?.contains { $0 != window.windowId } == true,
             )
         }
     }
-    for (app, result) in mapping {
-        for windowId in result.aliveWindowIds {
-            let window = try await MacWindow.getOrRegister(windowId: windowId, macApp: app)
-            try await window.runPendingOnWindowDetected()
+    for (app, windowIds) in mapping {
+        for windowId in windowIds {
+            try await MacWindow.getOrRegister(windowId: windowId, macApp: app)
         }
     }
 
@@ -151,7 +147,7 @@ private func refresh() async throws {
 
 func refreshObs(_: AXObserver, _: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let notif = notif as String
-    Task { @MainActor in
+    Task.startUnstructured { @MainActor in
         if !TrayMenuModel.shared.isEnabled { return }
         scheduleCancellableCompleteRefreshSession(.ax(notif))
     }

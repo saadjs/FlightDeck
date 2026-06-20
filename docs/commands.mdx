@@ -354,6 +354,7 @@ Set focus to a window.
 ```shell
 flightdeck focus [-h|--help] [--ignore-floating] [--wrap-around]
                 [--boundaries <boundary>] [--boundaries-action <action>]
+                [--fail-if-fullscreen] [--fail-if-macos-native-fullscreen]
                 (left|down|up|right)
 flightdeck focus [-h|--help] [--ignore-floating] [--wrap-around]
                 [--boundaries <boundary>] [--boundaries-action <action>]
@@ -408,6 +409,16 @@ Index is 0-based.
 
 Don't perceive floating windows as part of the tree.
 It may be useful for more reliable scripting.
+
+#### `--fail-if-fullscreen`
+
+Exit with non-zero code if the current target window is fullscreen by the `fullscreen` command.
+Only compatible with `(left|down|up|right)`.
+
+#### `--fail-if-macos-native-fullscreen`
+
+Exit with non-zero code if the current target window is in macOS native fullscreen.
+Only compatible with `(left|down|up|right)`.
 
 ### Arguments
 
@@ -516,7 +527,8 @@ Change layout of the focused window to the given layout
 ### Synopsis
 
 ```shell
-flightdeck layout [-h|--help] [--window-id <window-id>]
+flightdeck layout [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                 [--root] [--fail-if-noop]
                  (h_tiles|v_tiles|h_accordion|v_accordion|tiles|accordion|horizontal|vertical|tiling|floating)...
 ```
 
@@ -537,6 +549,21 @@ Print help
 #### `--window-id <window-id>`
 
 Act on the specified window instead of the focused window
+
+#### `--workspace <workspace>`
+
+Act on the specified workspace instead of the focused workspace.
+Requires `--root`.
+
+#### `--root`
+
+Instead of the focused window, change the layout of the workspace tiling root node.
+When this flag is used, `tiling` and `floating` are invalid target layouts.
+
+#### `--fail-if-noop`
+
+Exit with non-zero exit code if already in the requested layout.
+This flag permits only one target-layout argument.
 
 ### Examples
 
@@ -1338,7 +1365,9 @@ Move the focused window in the given direction
 ### Synopsis
 
 ```shell
-flightdeck move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>] [--boundaries-action <boundary-action>] (left|down|up|right)
+flightdeck move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>]
+               [--boundaries-action <boundary-action>] [--fail-if-fullscreen]
+               [--fail-if-macos-native-fullscreen] (left|down|up|right)
 ```
 
 Move the focused window in the given direction. See the "Examples" section for more details.
@@ -1367,6 +1396,14 @@ The default is: `workspace`
 Defines the behavior when requested to move across the `&lt;boundary&gt;`. 
 `&lt;boundary-action&gt;` possible values: `(stop|fail|create-implicit-container)`. 
 The default is: `create-implicit-container`
+
+#### `--fail-if-fullscreen`
+
+Exit with non-zero code if the target window is fullscreen by the `fullscreen` command.
+
+#### `--fail-if-macos-native-fullscreen`
+
+Exit with non-zero code if the target window is in macOS native fullscreen.
 
 ### Examples
 
@@ -1469,10 +1506,11 @@ Reload currently active config
 ### Synopsis
 
 ```shell
-flightdeck reload-config [-h|--help] [--no-gui] [--dry-run]
+flightdeck reload-config [-h|--help] [--no-gui] [--dry-run] [--warnings-as-errors]
 ```
 
 If the config contains errors they will be printed to stdout, and GUI will open to show the errors.
+By default, warnings are written to stderr and do not open the diagnostics window.
 
 ### Options
 
@@ -1486,6 +1524,10 @@ Don't open GUI to show error. Only use stdout to report errors
 #### `--dry-run`
 
 Validate the config and show errors (if any) but don't reload the config
+
+#### `--warnings-as-errors`
+
+Treat warnings as errors: print them to stdout, open the GUI diagnostics window, and return a non-zero exit code.
 
 ### Exit Codes
 
@@ -1732,40 +1774,27 @@ Condition evaluation utility
 ### Synopsis
 
 ```shell
-flightdeck test [-h|--help] <lhs> .= <rhs>
-flightdeck test [-h|--help] <lhs> /= <rhs>
-flightdeck test [-h|--help] <lhs> .~ <rhs>
-flightdeck test [-h|--help] <lhs> /~ <rhs>
+flightdeck test [-h|--help] <lhs> = <rhs>
+flightdeck test [-h|--help] <lhs> ~= <rhs>
 ```
 
 The `test` utility evaluates the expression and, if it evaluates to true, returns a zero (true) exit status; otherwise it returns 1 (false).
 
 The utility is inspired by builtin `/bin/test` utility.
 
-#### `&lt;lhs&gt; .= &lt;rhs&gt;`
+#### `&lt;lhs&gt; = &lt;rhs&gt;`
 
 Tests that `&lt;lhs&gt;` equals to `&lt;rhs&gt;`
-#### `&lt;lhs&gt; /= &lt;rhs&gt;`
-
-Tests that `&lt;lhs&gt;` does NOT equal to `&lt;rhs&gt;`
-#### `&lt;lhs&gt; .~ &lt;rhs&gt;`
+#### `&lt;lhs&gt; ~= &lt;rhs&gt;`
 
 Tests that `&lt;lhs&gt;` contains case insensitive `&lt;rhs&gt;` regex. The operator fails if `&lt;lhs&gt;` is not a string
-#### `&lt;lhs&gt; /~ &lt;rhs&gt;`
-
-Tests that `&lt;lhs&gt;` does NOT contain case insensitive `&lt;rhs&gt;` regex. The operator fails if `&lt;lhs&gt;` is not a string
-
-The choice of symbols is dictated by the shell expansion rules that "helpfully" expand arguments, if they start either with an exclamation mark or with an equals character.
-The dot prefix is used as a safe and neutral character.
-The slash denotes negation, following a common convention in functional programming (mnemonics: it "crosses out" the operator).
-The tilde is widely used in scripting languages to indicate regex matching.
 
 ### Examples
 
 
-Test if the application ID equals to Chrome: `flightdeck test %{app-bundle-id} .= com.google.Chrome`
+Test if the application ID equals to Chrome: `flightdeck test %{app-bundle-id} = com.google.Chrome`
 
-Test if the application name contains "chrome" (case insensitive): `flightdeck test %{app-name} .~ chrome`
+Test if the application name contains "chrome" (case insensitive): `flightdeck test %{app-name} ~= chrome`
 
 ### Arguments
 
@@ -1856,6 +1885,20 @@ One of the supplied conditions has evaluated to false.
 
 An error occurred.
 For instance, when `&lt;rhs&gt;` type doesn't match `&lt;lhs&gt;` type, or if the `test` subcommand couldn't be parsed.
+
+
+## test-not
+
+Negative condition evaluation utility
+
+### Synopsis
+
+```shell
+flightdeck test-not [-h|--help] <lhs> = <rhs>
+flightdeck test-not [-h|--help] <lhs> ~= <rhs>
+```
+
+The command works exactly like [`test`](#test), except that its result exit code is negated.
 
 
 ## trigger-binding

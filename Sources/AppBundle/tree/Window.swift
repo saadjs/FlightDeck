@@ -2,13 +2,12 @@ import AppKit
 import Common
 
 open class Window: TreeNode, Hashable {
-    private(set) var windowId: UInt32
+    let windowId: UInt32
     let app: any AbstractApp
     var lastFloatingSize: CGSize?
     var isFullscreen: Bool = false
     var noOuterGapsInFullscreen: Bool = false
     var layoutReason: LayoutReason = .standard
-    private var isOnWindowDetectedPending = false
 
     @MainActor
     init(id: UInt32, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -16,22 +15,6 @@ open class Window: TreeNode, Hashable {
         self.app = app
         self.lastFloatingSize = lastFloatingSize
         super.init(parent: parent, adaptiveWeight: adaptiveWeight, index: index)
-    }
-
-    func replaceWindowId(with windowId: UInt32) {
-        self.windowId = windowId
-    }
-
-    @MainActor
-    func deferOnWindowDetected() {
-        isOnWindowDetectedPending = true
-    }
-
-    @MainActor
-    func runPendingOnWindowDetected() async throws {
-        guard isOnWindowDetectedPending else { return }
-        isOnWindowDetectedPending = false
-        try await tryOnWindowDetected(self)
     }
 
     @MainActor static func get(byId windowId: UInt32) -> Window? { // todo make non optional
@@ -44,7 +27,7 @@ open class Window: TreeNode, Hashable {
     func closeAxWindow() { die("Not implemented") }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(ObjectIdentifier(self))
+        hasher.combine(windowId)
     }
 
     func getAxSize() async throws -> CGSize? { die("Not implemented") }
@@ -52,8 +35,7 @@ open class Window: TreeNode, Hashable {
     var isMacosFullscreen: Bool { get async throws { false } }
     var isMacosMinimized: Bool { get async throws { false } } // todo replace with enum MacOsWindowNativeState { normal, fullscreen, invisible }
     var isHiddenInCorner: Bool { die("Not implemented") }
-    @MainActor
-    func nativeFocus() { die("Not implemented") }
+    @MainActor func nativeFocus() { die("Not implemented") }
     func getAxRect() async throws -> Rect? { die("Not implemented") }
     func getCenter() async throws -> CGPoint? { try await getAxRect()?.center }
 
@@ -67,12 +49,22 @@ enum LayoutReason: Equatable {
 }
 
 extension Window {
-    var isFloating: Bool { parent is Workspace } // todo drop. It will be a source of bugs when sticky is introduced
+    var isFloating: Bool { // todo drop. It will be a source of bugs when sticky is introduced
+        switch windowParentCases {
+            case .floatingWindowsContainer: true
+            case .macosFullscreenWindowsContainer: false
+            case .macosHiddenAppsWindowsContainer: false
+            case .macosMinimizedWindowsContainer: false
+            case .macosPopupWindowsContainer: false
+            case .tilingContainer: false
+            case .unbound: false
+        }
+    }
 
     @discardableResult
     @MainActor
     func bindAsFloatingWindow(to workspace: Workspace) -> BindingData? {
-        bind(to: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        bind(to: workspace.floatingWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
     }
 
     func asMacWindow() -> MacWindow { self as! MacWindow }

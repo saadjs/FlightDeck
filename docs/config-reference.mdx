@@ -318,33 +318,30 @@ esc = ['reload-config', 'mode main']
 **Type:** Array of tables
 
 Callbacks that run when a new window is detected.
-Each entry may filter by app ID, app name, window title, workspace, or FlightDeck startup state.
+Each entry may use any command as its condition.
 See [on-window-detected](/guide#on-window-detected-callback) in the Guide.
 
 ```toml
 [[on-window-detected]]
-if.app-id = 'com.apple.finder'
+if = 'test %{app-bundle-id} = com.apple.finder'
 run = 'move-node-to-workspace F'
 
 [[on-window-detected]]
-if.app-name-regex-substring = 'terminal'
+if = 'test %{app-name} ~= terminal'
 run = ['layout floating', 'move-node-to-workspace T']
 check-further-callbacks = true
 ```
 
-### Matcher keys
-
-All matcher keys are optional.
+### Keys
 
 | Key | Type | Description |
 | --- | --- | --- |
-| `if.app-id` | String | Exact macOS bundle identifier |
-| `if.app-name-regex-substring` | String regex | Case-insensitive regex matched against the app name |
-| `if.window-title-regex-substring` | String regex | Case-insensitive regex matched against the window title |
-| `if.workspace` | String | Workspace the window would be placed in |
-| `if.during-aerospace-startup` | Boolean | Whether FlightDeck is currently starting up |
+| `if` | Command string | Optional condition. The callback matches when the command exits successfully |
 | `check-further-callbacks` | Boolean, default `false` | Continue evaluating later callbacks after this one matches |
 | `run` | String or array | Commands to execute when this callback matches |
+
+The legacy `if.app-id`, `if.app-name-regex-substring`, `if.window-title-regex-substring`,
+`if.workspace`, and `if.during-aerospace-startup` matcher keys remain supported for compatibility.
 
 ## indent-for-nested-containers-with-the-same-orientation
 

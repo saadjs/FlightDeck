@@ -660,53 +660,30 @@ defaults write com.apple.spaces spans-displays -bool true && killall SystemUISer
 
 ### on-window-detected callback
 
-You can use `on-window-detected` callback to run commands every time a new window is detected.
-
-Here is a showcase example that uses all the possible configurations:
+You can use `on-window-detected` to run commands every time a new window is detected.
 
 ```toml
 [[on-window-detected]]
-    if.app-id = 'com.apple.systempreferences'
-    if.app-name-regex-substring = 'settings'
-    if.window-title-regex-substring = 'substring'
-    if.workspace = 'workspace-name'
-    if.during-aerospace-startup = true
+    if = 'test %{app-bundle-id} = com.apple.systempreferences'
     check-further-callbacks = true
-    run = ['layout floating', 'move-node-to-workspace S']  # The callback itself
+    run = ['layout floating', 'move-node-to-workspace S']
 ```
 
-`run` commands are run only if the detected window matches all the specified conditions.
-If no conditions are specified then `run` is run every time a new window is detected.
+Callbacks are processed in declaration order. For each callback, FlightDeck runs its optional `if` command.
+If `if` exits successfully—or is omitted—FlightDeck runs `run` and stops processing callbacks.
+Set `check-further-callbacks = true` to continue processing later callbacks after a match.
 
-Several callbacks can be declared in the config.
-The callbacks are processed in the order they are declared.
-By default, the first callback that matches the criteria is run, and further callbacks are not considered.
-(The behavior can be overridden with `check-further-callbacks` option)
+The legacy `if.app-id`, `if.app-name-regex-substring`, `if.window-title-regex-substring`,
+`if.workspace`, and `if.during-aerospace-startup` matcher keys remain supported for compatibility,
+but new configurations should use an `if` command. The legacy startup matcher currently has no direct command equivalent.
 
-Available window conditions are:
-
-|   |   |
-| --- | --- |
-| Condition TOML key | Condition description |
-| `if.app-id` | Application ID exact match of the detected window |
-| `if.app-name-regex-substring` | Application name case insensitive regex substring of the detected window |
-| `if.window-title-regex-substring` | Window title case insensitive regex substring of the detected window |
-| `if.during-aerospace-startup` a | - If `true` then run the callback only during FlightDeck startup. - If `false` then run callback only *NOT* during FlightDeck startup. - If not specified then the condition isn’t checked |
-| `if.workspace` | Window's workspace name exact match |
-
-- `if.during-aerospace-startup = true` is useful if you want to do the initial app arrangement only on startup.
-
-- `if.during-aerospace-startup = false` is useful if you want to relaunch FlightDeck, but the callback has side effects that you don’t want to run on every relaunch.
-(e.g. the callback opens new windows)
-
-There are several ways to know `app-id`:
+There are several ways to find an app bundle ID:
 
 - Take a look at the precompiled [list of Apple application IDs](/goodies#list-of-apple-application-ids)
 - You can use [`flightdeck list-apps`](/commands#list-apps) CLI command to get IDs of running applications
 - `mdls -name kMDItemCFBundleIdentifier -r /Applications/App.app`
 
-IMPORTANT: Some windows initialize their title after the window appears.
-`window-title-regex-substring` may not work as expected for such windows
+IMPORTANT: Some windows initialize their title after the window appears, so conditions using `%{window-title}` may not work as expected for those windows.
 
 Examples of automations:
 
@@ -714,15 +691,15 @@ Examples of automations:
 
 ```toml
 [[on-window-detected]]
-    if.app-id = 'org.alacritty'
+    if = 'test %{app-bundle-id} = org.alacritty'
     run = 'move-node-to-workspace T' # mnemonics T - Terminal
 
 [[on-window-detected]]
-    if.app-id = 'com.google.Chrome'
+    if = 'test %{app-bundle-id} = com.google.Chrome'
     run = 'move-node-to-workspace W' # mnemonics W - Web browser
 
 [[on-window-detected]]
-    if.app-id = 'com.jetbrains.intellij'
+    if = 'test %{app-bundle-id} = com.jetbrains.intellij'
     run = 'move-node-to-workspace I' # mnemonics I - IDE
 ```
 - Make all windows float by default
@@ -859,14 +836,14 @@ You can also use `on-window-detected` to force tile or force float all windows o
 
 ```toml
 [[on-window-detected]]
-    if.app-id = '...'
+    if = 'test %{app-bundle-id} = ...'
     run = 'layout tiling'
 ```
 1. Force float all the windows (or windows of a particular app)
 
 ```toml
 [[on-window-detected]]
-    if.app-id = '...'
+    if = 'test %{app-bundle-id} = ...'
     run = 'layout floating'
 ```
 

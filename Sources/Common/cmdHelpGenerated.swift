@@ -44,6 +44,7 @@ let focus_monitor_help_generated = """
 let focus_help_generated = """
     USAGE: focus [-h|--help] [--ignore-floating] [--wrap-around]
                  [--boundaries <boundary>] [--boundaries-action <action>]
+                 [--fail-if-fullscreen] [--fail-if-macos-native-fullscreen]
                  (left|down|up|right)
        OR: focus [-h|--help] [--ignore-floating] [--wrap-around]
                  [--boundaries <boundary>] [--boundaries-action <action>]
@@ -60,7 +61,8 @@ let join_with_help_generated = """
     USAGE: join-with [-h|--help] [--window-id <window-id>] (left|down|up|right)
     """
 let layout_help_generated = """
-    USAGE: layout [-h|--help] [--window-id <window-id>]
+    USAGE: layout [-h|--help] [--window-id <window-id>|--workspace <workspace>]
+                  [--root] [--fail-if-noop]
                   (h_tiles|v_tiles|h_accordion|v_accordion|tiles|accordion|horizontal|vertical|tiling|floating)...
     """
 let list_apps_help_generated = """
@@ -121,10 +123,12 @@ let move_workspace_to_monitor_help_generated = """
        OR: move-workspace-to-monitor [-h|--help] [--workspace <workspace>] <monitor-pattern>...
     """
 let move_help_generated = """
-    USAGE: move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>] [--boundaries-action <boundary-action>] (left|down|up|right)
+    USAGE: move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>]
+                [--boundaries-action <boundary-action>] [--fail-if-fullscreen]
+                [--fail-if-macos-native-fullscreen] (left|down|up|right)
     """
 let reload_config_help_generated = """
-    USAGE: reload-config [-h|--help] [--no-gui] [--dry-run]
+    USAGE: reload-config [-h|--help] [--no-gui] [--dry-run] [--warnings-as-errors]
     """
 let resize_help_generated = """
     USAGE: resize [-h|--help] [--window-id <window-id>] (smart|smart-opposite|width|height) [+|-]<number>
@@ -144,10 +148,12 @@ let swap_help_generated = """
                 (left|down|up|right|dfs-next|dfs-prev)
     """
 let test_help_generated = """
-    USAGE: test [-h|--help] <lhs> .= <rhs>
-       OR: test [-h|--help] <lhs> /= <rhs>
-       OR: test [-h|--help] <lhs> .~ <rhs>
-       OR: test [-h|--help] <lhs> /~ <rhs>
+    USAGE: test [-h|--help] <lhs> = <rhs>
+       OR: test [-h|--help] <lhs> ~= <rhs>
+    """
+let test_not_help_generated = """
+    USAGE: test-not [-h|--help] <lhs> = <rhs>
+       OR: test-not [-h|--help] <lhs> ~= <rhs>
     """
 let trigger_binding_help_generated = """
     USAGE: trigger-binding [-h|--help] <binding> --mode <mode-id>
