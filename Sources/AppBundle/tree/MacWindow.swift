@@ -15,18 +15,8 @@ final class MacWindow: Window {
     @MainActor static var allWindows: [MacWindow] { Array(allWindowsMap.values) }
 
     @MainActor
-    static func replaceWindowId(from oldWindowId: UInt32, to newWindowId: UInt32) {
-        guard oldWindowId != newWindowId, let window = allWindowsMap.removeValue(forKey: oldWindowId) else { return }
-        if let duplicate = allWindowsMap.removeValue(forKey: newWindowId) {
-            duplicate.unbindFromParent()
-        }
-        window.replaceWindowId(with: newWindowId)
-        allWindowsMap[newWindowId] = window
-    }
-
-    @MainActor
     @discardableResult
-    static func getOrRegister(windowId: UInt32, macApp: MacApp, deferOnWindowDetected: Bool = false) async throws -> MacWindow {
+    static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId)
         let data = try await unbindAndGetBindingDataForNewWindow(
@@ -45,11 +35,7 @@ final class MacWindow: Window {
 
         try await debugWindowsIfRecording(window)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
-            if deferOnWindowDetected {
-                window.deferOnWindowDetected()
-            } else {
-                try await tryOnWindowDetected(window)
-            }
+            try await tryOnWindowDetected(window)
         }
         return window
     }
