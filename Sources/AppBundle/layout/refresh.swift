@@ -47,6 +47,7 @@ func runHeavyCompleteRefreshSession(
                 SecureInputPanel.shared.refresh()
                 try await normalizeLayoutReason()
                 if shouldLayoutWorkspaces { try await layoutWorkspaces() }
+                takeNativeFocusIfFocusedWorkspaceIsEmpty()
             }
         }
     }
@@ -86,6 +87,7 @@ func runLightSession<T>(
             if focusBefore != focusAfter {
                 focusAfter?.nativeFocus() // syncFocusToMacOs
             }
+            takeNativeFocusIfFocusedWorkspaceIsEmpty()
             scheduleCancellableCompleteRefreshSession(event)
             return result
         }
