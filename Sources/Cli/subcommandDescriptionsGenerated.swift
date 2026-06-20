@@ -37,6 +37,7 @@ let subcommandDescriptions = [
     ["  summon-workspace", "Move the requested workspace to the focused monitor."],
     ["  swap", "Swaps the focused window with another window."],
     ["  test", "Condition evaluation utility"],
+    ["  test-not", "Negative condition evaluation utility"],
     ["  trigger-binding", "Trigger FlightDeck binding as if it was pressed by user"],
     ["  true", "Return true value"],
     ["  volume", "Manipulate volume"],
