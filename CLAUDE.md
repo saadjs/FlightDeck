@@ -95,7 +95,8 @@ build version and a distinct FlightDeck tag (for example, build `0.21.2` from `v
 `flightdeck-v0.21.2-beta.1`) so tags from the two remotes never collide.
 
 Prerequisites: Developer ID Application signing identity in the keychain, a notary keychain profile
-(default `flightdeck-notary`), Xcode 26+, Node.js, Rust/cargo, bash 5, fish,
+(default `flightdeck-notary`), Xcode 26+, Node.js, Rust/cargo, Bash 5 available on `PATH` (for example,
+Homebrew's `/opt/homebrew/bin/bash`), fish,
 and a local clone of the Homebrew tap at `$HOME/src/homebrew-tap` (override via
 `FLIGHTDECK_HOMEBREW_TAP_PATH`).
 
