@@ -5,7 +5,7 @@
 # Existing AeroSpace configs and the upstream documentation links below remain applicable.
 
 # Config version for compatibility and deprecations
-# See: https://nikitabobko.github.io/AeroSpace/guide#config-version
+# See: https://flightdeck.saad.sh/config-reference#config-version
 # Fallback value (if you omit the key): config-version = 1
 config-version = 2
 

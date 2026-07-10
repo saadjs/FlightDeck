@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 
 node ./script/generate-command-docs.mjs
 
-test "$(find .man -name 'flightdeck*.1' | wc -l | tr -d ' ')" = 43
+test "$(find .man -name 'flightdeck*.1' | wc -l | tr -d ' ')" = 46
 git diff --exit-code -- \
     Sources/Common/cmdHelpGenerated.swift \
     Sources/Cli/subcommandDescriptionsGenerated.swift
