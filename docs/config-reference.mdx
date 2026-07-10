@@ -79,6 +79,23 @@ Useful if you never intentionally hide apps and want to avoid accidentally losin
 automatically-unhide-macos-hidden-apps = true
 ```
 
+## focus-follows-mouse
+
+**Type:** Table · **Default:** disabled
+
+Focus the normal managed window under the pointer when the pointer enters it.
+Fullscreen windows and accessibility elements that do not represent normal windows are ignored.
+
+```toml
+focus-follows-mouse.enabled = true
+```
+
+### Nested keys
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `enabled` | Boolean, default `false` | Enable focus follows mouse |
+
 ## focus-next-window-on-window-closed
 
 **Type:** Boolean · **Default:** `true`
