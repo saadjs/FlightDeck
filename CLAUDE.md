@@ -101,7 +101,7 @@ and a local clone of the Homebrew tap at `$HOME/src/homebrew-tap` (override via
 
 **Runbook — `script/release-local.sh`** does tests → `build-release.sh --notarize` (universal arm64+x86_64
 build, sign, notarize, staple, pack `FlightDeck-vX.Y.Z.zip`) → generates the brew cask with the GitHub
-release URL → copies it into `<tap>/Casks/flightdeck.rb`. It stops there and prints the remaining steps.
+release URL → copies it into `<tap>/Casks/<cask-name>.rb`. It stops there and prints the remaining steps.
 
 ```sh
 ./script/release-local.sh \
@@ -116,7 +116,7 @@ Then the **manual, outward-facing** steps (irreversible):
    built — the binary embeds `git rev-parse HEAD` and the build verifies it).
 2. `gh release create flightdeck-vX.Y.Z-beta.1 .release/FlightDeck-vX.Y.Z.zip --prerelease` — the zip name must match the cask URL
    (`.../releases/download/flightdeck-vX.Y.Z-beta.1/FlightDeck-vX.Y.Z.zip`); the cask `sha256` was computed from this zip.
-3. Commit and push the updated `Casks/flightdeck.rb` in the tap repo.
+3. Commit and push the updated cask in the tap repo (for this prerelease, `Casks/flightdeck-beta.rb`).
 
 Notes: `build-release.sh --skip-notarization` (or omitting `--notarize`) builds without notarizing for
 local testing. `install-from-sources.sh` installs a local `flightdeck-dev` cask (work in progress).
