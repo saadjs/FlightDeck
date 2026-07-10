@@ -45,7 +45,6 @@ Xcode/LSP — the `.xcodeproj` exists only for release builds.
 Several committed files are generated and **must stay in sync with their sources**, or tests/release
 builds fail. `generate.sh` produces:
 - `Sources/Common/versionGenerated.swift` and `gitHashGenerated.swift` (version + git hash; SNAPSHOT by default)
-- shell parser (`ShellParserGenerated/`, from `grammar/`) — **requires Java**
 - committed CLI help sources plus ignored man-page output (`.man/`) from `docs/commands.mdx` —
   **requires Node.js**
 - the Xcode project (XcodeGen)
@@ -57,10 +56,6 @@ output from `grammar/commands-bnf-grammar.txt`.
 `test.sh` starts and ends with a clean-worktree gate, and `build-release.sh` checks after its initial
 generation pass. `script/check-uncommitted-files.sh` fails for **any** tracked or untracked change, not
 only stale generated files. Commit or stash all changes before running `test.sh` or a release build.
-
-**Java gotcha:** `generate.sh` (full run, incl. shell parser) needs Java on `PATH`. With Homebrew
-OpenJDK: `export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"` before running `generate.sh`,
-`build-release.sh`, or `script/release-local.sh`.
 
 ## Common commands
 
@@ -93,12 +88,14 @@ Tooling (swiftformat, swiftlint, periphery, xcodegen) is auto-installed into `.d
 
 ## Release process
 
-Releases are built locally (there is no release CI). The release version is supplied explicitly with
-`--build-version`; the release tag is created manually after building. Nothing is hardcoded in
-committed generated version files. Release tags follow `vMAJOR.MINOR.PATCH`.
+Releases are built locally (there is no release CI). The release build version is supplied explicitly with
+`--build-version`; the FlightDeck release tag is created manually after building. Nothing is hardcoded in
+committed generated version files. For an upstream-synced release, use the AeroSpace numeric version as the
+build version and a distinct FlightDeck tag (for example, build `0.21.2` from `v0.21.2-Beta` and tag it
+`flightdeck-v0.21.2-beta.1`) so tags from the two remotes never collide.
 
 Prerequisites: Developer ID Application signing identity in the keychain, a notary keychain profile
-(default `flightdeck-notary`), Xcode 26+, Node.js, Java on `PATH` (see above), Rust/cargo, bash 5, fish,
+(default `flightdeck-notary`), Xcode 26+, Node.js, Rust/cargo, bash 5, fish,
 and a local clone of the Homebrew tap at `$HOME/src/homebrew-tap` (override via
 `FLIGHTDECK_HOMEBREW_TAP_PATH`).
 
@@ -107,15 +104,18 @@ build, sign, notarize, staple, pack `FlightDeck-vX.Y.Z.zip`) → generates the b
 release URL → copies it into `<tap>/Casks/flightdeck.rb`. It stops there and prints the remaining steps.
 
 ```sh
-export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
-./script/release-local.sh --build-version X.Y.Z
+./script/release-local.sh \
+  --build-version X.Y.Z \
+  --upstream-tag vX.Y.Z-Beta \
+  --release-tag flightdeck-vX.Y.Z-beta.1 \
+  --cask-name flightdeck-beta
 ```
 
 Then the **manual, outward-facing** steps (irreversible):
-1. Tag the built commit: `git tag vX.Y.Z && git push origin vX.Y.Z` (must be the exact commit that was
+1. Tag the built commit: `git tag flightdeck-vX.Y.Z-beta.1 && git push origin flightdeck-vX.Y.Z-beta.1` (must be the exact commit that was
    built — the binary embeds `git rev-parse HEAD` and the build verifies it).
-2. `gh release create vX.Y.Z .release/FlightDeck-vX.Y.Z.zip` — the zip name must match the cask URL
-   (`.../releases/download/vX.Y.Z/FlightDeck-vX.Y.Z.zip`); the cask `sha256` was computed from this zip.
+2. `gh release create flightdeck-vX.Y.Z-beta.1 .release/FlightDeck-vX.Y.Z.zip --prerelease` — the zip name must match the cask URL
+   (`.../releases/download/flightdeck-vX.Y.Z-beta.1/FlightDeck-vX.Y.Z.zip`); the cask `sha256` was computed from this zip.
 3. Commit and push the updated `Casks/flightdeck.rb` in the tap repo.
 
 Notes: `build-release.sh --skip-notarization` (or omitting `--notarize`) builds without notarizing for

@@ -49,19 +49,21 @@ swift build -c release --arch arm64 --arch x86_64 --product "$cli_name" -Xswiftc
 
 rm -rf .release && mkdir .release
 
-xcode_configuration="Release"
-xcodebuild -version
-xcodebuild-pretty .release/xcodebuild.log clean build \
-    -scheme "$app_name" \
-    -destination "generic/platform=macOS" \
-    -configuration "$xcode_configuration" \
-    -derivedDataPath .xcode-build \
-    DEVELOPMENT_TEAM="$team_id" \
-    CODE_SIGN_IDENTITY="$codesign_identity"
+cd ./xcode
+    xcode_configuration="Release"
+    xcodebuild -version
+    xcodebuild-pretty ../.release/xcodebuild.log clean build \
+        -scheme "$app_name" \
+        -destination "generic/platform=macOS" \
+        -configuration "$xcode_configuration" \
+        -derivedDataPath .xcode-build \
+        DEVELOPMENT_TEAM="$team_id" \
+        CODE_SIGN_IDENTITY="$codesign_identity"
+cd -
 
-FLIGHTDECK_TEAM_ID="$team_id" ./generate.sh --ignore-cmd-help --ignore-shell-parser
+FLIGHTDECK_TEAM_ID="$team_id" ./generate.sh --ignore-cmd-help
 
-cp -r ".xcode-build/Build/Products/$xcode_configuration/$app_name.app" .release
+cp -r "xcode/.xcode-build/Build/Products/$xcode_configuration/$app_name.app" .release
 cp -r ".build/apple/Products/Release/$cli_name" .release
 
 ############

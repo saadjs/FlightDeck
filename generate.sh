@@ -7,7 +7,6 @@ export XCODEGEN_FLIGHTDECK_DEVELOPMENT_TEAM="${FLIGHTDECK_TEAM_ID:-2ZPA772V9V}"
 build_version="0.0.0-SNAPSHOT"
 generate_xcodeproj=1
 generate_cmd_help=1
-generate_shell_parser=1
 generate_git_hash=0
 while test $# -gt 0; do
     case $1 in
@@ -16,14 +15,9 @@ while test $# -gt 0; do
         --generate-git-hash) generate_git_hash=1; shift 1;;
         --ignore-cmd-help) generate_cmd_help=0; shift 1 ;;
         --ignore-xcodeproj) generate_xcodeproj=0; shift 1 ;;
-        --ignore-shell-parser) generate_shell_parser=0; shift 1 ;;
         *) echo "Unknown option $1"; exit 1 ;;
     esac
 done
-
-if test $generate_shell_parser = 1; then
-    ./script/generate-shell-parser.sh
-fi
 
 if test $generate_cmd_help = 1; then
     node ./script/generate-command-docs.mjs
@@ -43,5 +37,6 @@ EOF
 if test $generate_xcodeproj = 1; then
     export XCODEGEN_FLIGHTDECK_VERSION=$build_version
     ./script/install-dep.sh --xcodegen
-    ./.deps/xcodegen/xcodegen # https://github.com/yonaskolb/XcodeGen
+    cd xcode
+    ../.deps/xcodegen/xcodegen # https://github.com/yonaskolb/XcodeGen
 fi

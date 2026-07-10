@@ -56,7 +56,7 @@ final class ConfigTest: XCTestCase {
         assertEquals(result.errors, [])
         assertEquals(result.strWarnings, [
             "[WARNING] The current 'config-version = 1' is outdated. " +
-                "Please consider migrating to 'config-version = \(maxConfigVersion)'. " +
+                "Please consider migrating to 'config-version = \(ConfigVersion.max)'. " +
                 "See https://nikitabobko.github.io/AeroSpace/guide#config-version for the migration guide.",
         ])
     }
@@ -64,7 +64,7 @@ final class ConfigTest: XCTestCase {
     func testLatestConfigVersionNoWarning() {
         let result = parseConfig(
             """
-            config-version = \(maxConfigVersion)
+            config-version = \(ConfigVersion.max)
             """,
         )
         assertEquals(result.errors, [])
@@ -99,14 +99,14 @@ final class ConfigTest: XCTestCase {
         assertEquals(errors, ["[ERROR] persistent-workspaces: This config option is only available since \'config-version = 2\'"])
     }
 
-    func testQueryCantBeUsedInConfig() {
+    func testWrongTypeForCommand() {
         let errors = parseConfig(
             """
             [mode.main.binding]
-                alt-a = 'list-apps'
+                alt-a = [1, 'focus right']
             """,
         ).strErrors
-        XCTAssertTrue(errors.singleOrNil()?.contains("cannot be used in config") == true)
+        assertEquals(errors, ["[ERROR] mode.main.binding.alt-a[0]: Expected type is \'String\'. But actual type is \'Int\'"])
     }
 
     func testDropBindings() {
@@ -128,7 +128,7 @@ final class ConfigTest: XCTestCase {
             """,
         )
         assertEquals(result.errors, [])
-        let binding = HotkeyBinding(.option, .h, [FocusCommand.new(direction: .left)])
+        let binding = HotkeyBinding(.option, .h, .cmd(FocusCommand.new(direction: .left)))
         assertEquals(
             result.config.modes[mainModeId],
             Mode(bindings: [binding.descriptionWithKeyCode: binding]),
@@ -165,7 +165,7 @@ final class ConfigTest: XCTestCase {
                 "[ERROR] mode.main.binding.alt-hh: Can\'t parse the key in \'alt-hh\' binding",
             ],
         )
-        let binding = HotkeyBinding(.option, .k, [FocusCommand.new(direction: .up)])
+        let binding = HotkeyBinding(.option, .k, .cmd(FocusCommand.new(direction: .up)))
         assertEquals(
             result.config.modes[mainModeId],
             Mode(bindings: [binding.descriptionWithKeyCode: binding]),
@@ -256,12 +256,12 @@ final class ConfigTest: XCTestCase {
     }
 
     func testMoveWorkspaceToMonitorCommandParsing() {
-        XCTAssertTrue(parseCommand("move-workspace-to-monitor --wrap-around next").cmdOrNil is MoveWorkspaceToMonitorCommand)
-        XCTAssertTrue(parseCommand("move-workspace-to-display --wrap-around next").cmdOrNil is MoveWorkspaceToMonitorCommand)
+        XCTAssertTrue(parseCommand("move-workspace-to-monitor --wrap-around next").cmdOrNil?.flatten().singleOrNil() is MoveWorkspaceToMonitorCommand)
+        XCTAssertTrue(parseCommand("move-workspace-to-display --wrap-around next").cmdOrNil?.flatten().singleOrNil() is MoveWorkspaceToMonitorCommand)
     }
 
     func testParseTiles() {
-        let command = parseCommand("layout tiles h_tiles v_tiles list h_list v_list").cmdOrNil
+        let command = parseCommand("layout tiles h_tiles v_tiles list h_list v_list").cmdOrNil?.flatten().singleOrNil()
         XCTAssertTrue(command is LayoutCommand)
         assertEquals((command as! LayoutCommand).args.toggleBetween.val, [.tiles, .h_tiles, .v_tiles, .tiles, .h_tiles, .v_tiles])
 
@@ -334,6 +334,7 @@ final class ConfigTest: XCTestCase {
             """
             on-window-detected = [
                 { # 0
+                    if = 'true',
                     check-further-callbacks = true,
                     run = ['layout floating', 'move-node-to-workspace W'],
                 },
@@ -343,18 +344,19 @@ final class ConfigTest: XCTestCase {
                 },
                 {}, # 2
                 { # 3
-                    run = ['move-node-to-workspace S', 'layout tiling'],
+                    if = 'true', run = ['move-node-to-workspace S', 'layout tiling'],
                 },
                 { # 4
-                    run = ['move-node-to-workspace S', 'move-node-to-workspace W'],
+                    if = 'true', run = ['move-node-to-workspace S', 'move-node-to-workspace W'],
                 },
                 { # 5
-                    run = ['move-node-to-workspace S', 'layout h_tiles'],
+                    if = 'true', run = ['move-node-to-workspace S', 'layout h_tiles'],
                 },
                 { # 6
                     if = 'test %{app-bundle-id} = org.alacritty',
                     run = ['move-node-to-workspace T'],
                 },
+                { if = '', run = ''}, # 7
             ]
             """,
         )
@@ -364,47 +366,70 @@ final class ConfigTest: XCTestCase {
             .copy(\.rhs, .initialized("org.alacritty"))
         assertEquals(result.config.onWindowDetected, [
             WindowDetectedCallback( // 0
+                matcher: .command(.cmd(TrueCommand.instance)),
                 checkFurtherCallbacks: true,
-                rawRun: [
-                    LayoutCommand(args: LayoutCmdArgs(rawArgs: [], toggleBetween: [.floating])),
-                    MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "W")),
-                ],
+                rawRun: .seq([
+                    .cmd(LayoutCommand(args: LayoutCmdArgs(rawArgs: [], toggleBetween: [.floating]))),
+                    .cmd(MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "W"))),
+                ]),
             ),
             WindowDetectedCallback( // 1
                 matcher: .legacy(LegacyWindowDetectedCallbackMatcher(
                     appId: "com.apple.systempreferences",
                 )),
-                rawRun: [],
+                rawRun: .empty,
             ),
             WindowDetectedCallback( // 3
-                rawRun: [
-                    MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "S")),
-                    LayoutCommand(args: LayoutCmdArgs(rawArgs: [], toggleBetween: [.tiling])),
-                ],
+                matcher: .command(.cmd(TrueCommand.instance)),
+                rawRun: .seq([
+                    .cmd(MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "S"))),
+                    .cmd(LayoutCommand(args: LayoutCmdArgs(rawArgs: [], toggleBetween: [.tiling]))),
+                ]),
             ),
             WindowDetectedCallback( // 4
-                rawRun: [
-                    MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "S")),
-                    MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "W")),
-                ],
+                matcher: .command(.cmd(TrueCommand.instance)),
+                rawRun: .seq([
+                    .cmd(MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "S"))),
+                    .cmd(MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "W"))),
+                ]),
             ),
             WindowDetectedCallback( // 5
-                rawRun: [
-                    MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "S")),
-                    LayoutCommand(args: LayoutCmdArgs(rawArgs: [], toggleBetween: [.h_tiles])),
-                ],
+                matcher: .command(.cmd(TrueCommand.instance)),
+                rawRun: .seq([
+                    .cmd(MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "S"))),
+                    .cmd(LayoutCommand(args: LayoutCmdArgs(rawArgs: [], toggleBetween: [.h_tiles]))),
+                ]),
             ),
             WindowDetectedCallback( // 6
-                matcher: .command(TestCommand(args: matcher6Args)),
-                rawRun: [
-                    MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "T")),
-                ],
+                matcher: .command(.cmd(TestCommand(args: matcher6Args))),
+                rawRun: .cmd(MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "T"))),
             ),
         ])
 
         assertEquals(result.strErrors, [
+            "[ERROR] on-window-detected[2]: Omitting \'if\' is error prone. You can use `if = \'true\'` to preserve the previous behavior.\nBut heads up! You may have missed \'check-further-callbacks = true\'",
             "[ERROR] on-window-detected[2]: \'run\' is mandatory key",
+            "[ERROR] on-window-detected[7]: Omitting \'if\' is error prone. You can use `if = \'true\'` to preserve the previous behavior.\nBut heads up! You may have missed \'check-further-callbacks = true\'",
         ])
+    }
+
+    func testParseOnWindowDetected2() {
+        let result = parseConfig(
+            """
+            on-window-detected = [
+                { check-further-callbacks = true, run = '', },
+            ]
+            """,
+        )
+        assertEquals(result.config.onWindowDetected, [
+            WindowDetectedCallback(
+                matcher: .command(.empty),
+                checkFurtherCallbacks: true,
+                rawRun: .empty,
+            ),
+        ])
+
+        assertEquals(result.errors, [])
     }
 
     func testParseInlineTables() {
@@ -541,10 +566,10 @@ final class ConfigTest: XCTestCase {
             """,
         )
         assertEquals(result.errors, [])
-        assertEquals(result.config.onFocusChanged.count, 1)
-        XCTAssertTrue(result.config.onFocusChanged[0] is FocusCommand)
-        assertEquals(result.config.onModeChanged.count, 2)
-        assertEquals(result.config.onFocusedMonitorChanged.count, 1)
+        assertEquals(result.config.onFocusChanged.flatten().count, 1)
+        XCTAssertTrue(result.config.onFocusChanged.flatten()[0] is FocusCommand)
+        assertEquals(result.config.onModeChanged.flatten().count, 2)
+        assertEquals(result.config.onFocusedMonitorChanged.flatten().count, 1)
     }
 
     func testOnFocusChangedTypeError() {
@@ -557,26 +582,6 @@ final class ConfigTest: XCTestCase {
             result.strErrors,
             ["[ERROR] on-focus-changed: Expected types are \'string\' or \'array\'. But actual type is \'int\'"],
         )
-    }
-
-    func testMacosNativeCommandsMustBeLast() {
-        let errors = parseConfig(
-            """
-            on-focus-changed = ['macos-native-fullscreen', 'focus left']
-            """,
-        ).strErrors
-        assertEquals(
-            errors,
-            ["[ERROR] on-focus-changed: macos-native-* commands are only allowed to be the last commands in the list"],
-        )
-
-        // Macos-native-* command as the last entry is allowed
-        let ok = parseConfig(
-            """
-            on-focus-changed = ['focus left', 'macos-native-fullscreen']
-            """,
-        )
-        assertEquals(ok.errors, [])
     }
 
     func testParseDefaultRootContainerLayout() {
@@ -703,7 +708,7 @@ final class ConfigTest: XCTestCase {
             "q": .q,
             "unicorn": .u,
         ]))
-        let binding = HotkeyBinding(.option, .u, [WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("unicorn").getOrDie())))])
+        let binding = HotkeyBinding(.option, .u, .cmd(WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("unicorn").getOrDie())))))
         assertEquals(result.config.modes[mainModeId]?.bindings, [binding.descriptionWithKeyCode: binding])
 
         let errors1 = parseConfig(
