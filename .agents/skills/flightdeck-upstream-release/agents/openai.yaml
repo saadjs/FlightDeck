@@ -1,0 +1,4 @@
+interface:
+  display_name: "FlightDeck Upstream Release"
+  short_description: "Sync and release FlightDeck safely"
+  default_prompt: "Use $flightdeck-upstream-release to check AeroSpace releases, sync FlightDeck if needed, validate it, and prepare a matching release."

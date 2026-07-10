@@ -28,6 +28,8 @@ brew install --cask saadjs/tap/flightdeck-beta
 ```
 
 Beta builds are signed and notarized like stable releases.
+When matching an AeroSpace beta, FlightDeck keeps the macOS app version numeric (for example, `0.21.3`) and
+identifies the prerelease through its GitHub release tag and this beta cask.
 The beta cask conflicts with the stable `flightdeck` cask (they install the same `FlightDeck.app`), so uninstall one before installing the other:
 
 ```bash
