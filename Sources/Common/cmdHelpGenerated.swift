@@ -19,6 +19,9 @@ let config_help_generated = """
 let debug_windows_help_generated = """
     USAGE: debug-windows [-h|--help] [--window-id <window-id>]
     """
+let echo_help_generated = """
+    USAGE: echo [-h|--help] [--stderr] [--window-id <window-id>] -- <string>...
+    """
 let enable_help_generated = """
     USAGE: enable [-h|--help] toggle
        OR: enable [-h|--help] on [--fail-if-noop]
@@ -26,6 +29,9 @@ let enable_help_generated = """
     """
 let exec_and_forget_help_generated = """
     USAGE: exec-and-forget <bash-script>
+    """
+let eval_help_generated = """
+    USAGE: eval [-h|--help] [--stdin] [--] <flightdeck-shell-expr>
     """
 let false_help_generated = """
     USAGE: false [-h|--help]
@@ -154,6 +160,10 @@ let test_help_generated = """
 let test_not_help_generated = """
     USAGE: test-not [-h|--help] <lhs> = <rhs>
        OR: test-not [-h|--help] <lhs> ~= <rhs>
+    """
+let run_callback_help_generated = """
+    USAGE: run-callback [-h|--help] [--for-every-window|--window-id <window-id>] on-window-detected
+       OR: run-callback [-h|--help] (on-focus-changed|on-focused-monitor-changed)
     """
 let trigger_binding_help_generated = """
     USAGE: trigger-binding [-h|--help] <binding> --mode <mode-id>

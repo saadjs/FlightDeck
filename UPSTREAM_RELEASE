@@ -1,0 +1,3 @@
+# The AeroSpace release merged into this FlightDeck branch.
+AEROSPACE_TAG=v0.21.2-Beta
+AEROSPACE_COMMIT=649301b2875b6eec23abda9b24bc765eecd37bf1
