@@ -190,6 +190,39 @@ Print debug information of the specified window right away.
 Usage of this flag disables interactive mode.
 
 
+## echo
+
+Print arguments and interpolation variables to stdout
+
+### Synopsis
+
+```shell
+flightdeck echo [-h|--help] [--stderr] [--window-id <window-id>] -- <string>...
+```
+
+Print each supplied string, expanding interpolation variables such as `%{window-title}`. Use it in an [`eval`](#eval) shell expression to provide explicit input to another command.
+
+### Options
+
+#### `-h, --help`
+
+Print help
+
+#### `--stderr`
+
+Print to stderr instead of stdout.
+
+#### `--window-id <window-id>`
+
+Use interpolation variables for the specified window.
+
+### Arguments
+
+#### `<string>`
+
+String to print. Each supplied string is printed on a separate line.
+
+
 ## enable
 
 Temporarily disable window management
@@ -240,6 +273,39 @@ alt-enter = 'exec-and-forget open -n /System/Applications/Utilities/Terminal.app
 
 - The command is available in config
 - The command is *NOT* available in CLI
+
+
+## eval
+
+Send multiple FlightDeck commands at once
+
+### Synopsis
+
+```shell
+flightdeck eval [-h|--help] [--stdin] [--] <flightdeck-shell-expr>
+```
+
+Evaluate a FlightDeck shell expression. The shell supports command composition such as pipes and logical operators.
+
+### Options
+
+#### `-h, --help`
+
+Print help
+
+#### `--stdin`
+
+Capture standard input and forward it to the shell expression. Without this flag, standard input is ignored.
+
+### Arguments
+
+#### `<flightdeck-shell-expr>`
+
+FlightDeck shell expression to evaluate.
+
+### Examples
+
+- Cycle between workspaces: `flightdeck eval 'echo a b c | workspace --wrap-around --stdin next'`
 
 
 ## false
@@ -1899,6 +1965,40 @@ flightdeck test-not [-h|--help] <lhs> ~= <rhs>
 ```
 
 The command works exactly like [`test`](#test), except that its result exit code is negated.
+
+
+## run-callback
+
+Run FlightDeck config callbacks on demand
+
+### Synopsis
+
+```shell
+flightdeck run-callback [-h|--help] [--for-every-window|--window-id <window-id>] on-window-detected
+flightdeck run-callback [-h|--help] (on-focus-changed|on-focused-monitor-changed)
+```
+
+Re-run callbacks that FlightDeck normally invokes for configuration events. Output and exit status from invoked callbacks are forwarded.
+
+### Options
+
+#### `-h, --help`
+
+Print help
+
+#### `--for-every-window`
+
+Run `on-window-detected` callbacks for every known window. This is mutually exclusive with `--window-id`.
+
+#### `--window-id <window-id>`
+
+Run `on-window-detected` callbacks for one window. This is mutually exclusive with `--for-every-window`.
+
+### Arguments
+
+#### `<callback>`
+
+One of `on-window-detected`, `on-focus-changed`, or `on-focused-monitor-changed`.
 
 
 ## trigger-binding
