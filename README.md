@@ -14,7 +14,7 @@ Install the signed and notarized release from the Homebrew tap:
 brew install --cask saadjs/tap/flightdeck
 ```
 
-To try pre-release builds, install the beta cask instead (it conflicts with the stable cask, so uninstall one before installing the other):
+The beta channel is synchronized with the latest published AeroSpace release and is recommended for the newest features and fixes. It conflicts with the stable cask, so uninstall one before installing the other:
 
 ```sh
 brew install --cask saadjs/tap/flightdeck-beta
