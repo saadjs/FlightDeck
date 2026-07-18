@@ -3,6 +3,7 @@ cd "$(dirname "$0")"
 source ./script/setup.sh
 
 build_version="0.0.0-SNAPSHOT"
+cask_version=""
 app_name="FlightDeck"
 cli_name="flightdeck"
 team_id="${FLIGHTDECK_TEAM_ID:-2ZPA772V9V}"
@@ -12,14 +13,17 @@ notary_profile="${FLIGHTDECK_NOTARY_PROFILE:-flightdeck-notary}"
 while test $# -gt 0; do
     case $1 in
         --build-version) build_version="$2"; shift 2;;
+        --cask-version) cask_version="$2"; shift 2;;
         --codesign-identity) codesign_identity="$2"; shift 2;;
         --team-id) team_id="$2"; shift 2;;
         --notary-profile) notary_profile="$2"; shift 2;;
         --notarize) notarize=1; shift 1;;
         --skip-notarization) notarize=0; shift 1;;
-        *) echo "Unknown option $1" > /dev/stderr; exit 1 ;;
+        *) echo "Unknown option $1" >&2; exit 1 ;;
     esac
 done
+
+if test -z "$cask_version"; then cask_version="$build_version"; fi
 
 if test -z "$codesign_identity"; then
     codesign_identity="Developer ID Application: Saad Bash ($team_id)"
@@ -161,5 +165,6 @@ for cask_name in flightdeck flightdeck-dev; do
     ./script/build-brew-cask.sh \
         --cask-name "$cask_name" \
         --zip-uri ".release/$release_root.zip" \
-        --build-version "$build_version"
+        --build-version "$build_version" \
+        --cask-version "$cask_version"
 done

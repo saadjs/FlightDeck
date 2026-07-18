@@ -91,10 +91,10 @@ Tooling (swiftformat, swiftlint, periphery, xcodegen) is auto-installed into `.d
 Releases are built locally (there is no release CI). The release build version is supplied explicitly with
 `--build-version`; the FlightDeck release tag is created manually after building. Nothing is hardcoded in
 committed generated version files. `--build-version` becomes the app's `CFBundleShortVersionString`, so it
-must be a numeric `X.Y.Z` version. For an upstream-synced prerelease, use the AeroSpace numeric core as the
-build version and retain its beta identity in a distinct FlightDeck tag and beta cask (for example, build
-`0.21.2` from `v0.21.2-Beta`, tag it `flightdeck-v0.21.2-beta.1`, and use `flightdeck-beta`). This keeps
-the macOS bundle valid while preventing Git tag collisions between the two remotes.
+must be a numeric `X.Y.Z` version. `--cask-version` preserves the full AeroSpace release version in the
+canonical `flightdeck` cask. For example, build `0.21.3` from `v0.21.3-Beta`, set the cask version to
+`0.21.3-Beta`, and tag it `flightdeck-v0.21.3-Beta`. The FlightDeck prefix prevents collisions with
+upstream tags while the numeric build version keeps the macOS bundle valid.
 
 Prerequisites: Developer ID Application signing identity in the keychain, a notary keychain profile
 (default `flightdeck-notary`), Xcode 26+, Node.js, Rust/cargo, Bash 5 available on `PATH` (for example,
@@ -104,22 +104,23 @@ and a local clone of the Homebrew tap at `$HOME/src/homebrew-tap` (override via
 
 **Runbook — `script/release-local.sh`** does tests → `build-release.sh --notarize` (universal arm64+x86_64
 build, sign, notarize, staple, pack `FlightDeck-vX.Y.Z.zip`) → generates the brew cask with the GitHub
-release URL → copies it into `<tap>/Casks/<cask-name>.rb`. It stops there and prints the remaining steps.
+release URL → copies it into `<tap>/Casks/flightdeck.rb`. It stops there and prints the remaining steps.
 
 ```sh
 ./script/release-local.sh \
   --build-version X.Y.Z \
+  --cask-version X.Y.Z-Beta \
   --upstream-tag vX.Y.Z-Beta \
-  --release-tag flightdeck-vX.Y.Z-beta.1 \
-  --cask-name flightdeck-beta
+  --release-tag flightdeck-vX.Y.Z-Beta
 ```
 
 Then the **manual, outward-facing** steps (irreversible):
-1. Tag the built commit: `git tag flightdeck-vX.Y.Z-beta.1 && git push origin flightdeck-vX.Y.Z-beta.1` (must be the exact commit that was
+1. Tag the built commit: `git tag flightdeck-vX.Y.Z-Beta && git push origin flightdeck-vX.Y.Z-Beta` (must be the exact commit that was
    built — the binary embeds `git rev-parse HEAD` and the build verifies it).
-2. `gh release create flightdeck-vX.Y.Z-beta.1 .release/FlightDeck-vX.Y.Z.zip --prerelease` — the zip name must match the cask URL
-   (`.../releases/download/flightdeck-vX.Y.Z-beta.1/FlightDeck-vX.Y.Z.zip`); the cask `sha256` was computed from this zip.
-3. Commit and push the updated cask in the tap repo (for this prerelease, `Casks/flightdeck-beta.rb`).
+2. `gh release create flightdeck-vX.Y.Z-Beta .release/FlightDeck-vX.Y.Z.zip --prerelease` — the zip name must match the cask URL
+   (`.../releases/download/flightdeck-vX.Y.Z-Beta/FlightDeck-vX.Y.Z.zip`); the cask `sha256` was computed from this zip.
+3. Commit and push `Casks/flightdeck.rb` in the tap repo. The retired `flightdeck-beta` token remains mapped to `flightdeck` through
+   the tap's `cask_renames.json`.
 
 Notes: `build-release.sh --skip-notarization` (or omitting `--notarize`) builds without notarizing for
 local testing. `install-from-sources.sh` installs a local `flightdeck-dev` cask (work in progress).

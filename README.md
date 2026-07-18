@@ -8,16 +8,10 @@ FlightDeck is an i3-like tiling window manager for macOS.
 
 ## Documentation
 
-Install the signed and notarized release from the Homebrew tap:
+Install the signed and notarized release from the Homebrew tap. The canonical cask follows the latest published AeroSpace release, including upstream beta releases:
 
 ```sh
 brew install --cask saadjs/tap/flightdeck
-```
-
-The beta channel is synchronized with the latest published AeroSpace release and is recommended for the newest features and fixes. It conflicts with the stable cask, so uninstall one before installing the other:
-
-```sh
-brew install --cask saadjs/tap/flightdeck-beta
 ```
 
 See the [FlightDeck documentation](https://flightdeck.saad.sh), [command reference](https://flightdeck.saad.sh/commands), and bundled `flightdeck` manpages for usage and configuration details.
